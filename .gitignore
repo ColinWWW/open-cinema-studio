@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.safetensors
+*.ckpt
+outputs/
+*.mp4
+*.webm
+*.mov
+!docs/media/*.mp4
