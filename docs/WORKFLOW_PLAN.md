@@ -113,7 +113,7 @@ Keep these titles stable and the app never needs to know the rest of the graph.
 
 | Day | Date | Work |
 |---|---|---|
-| 1 | Oct 18 | Pod up, update ComfyUI, download models, get stock LTX-2 i2v + depth IC-LoRA running. |
+| 1 | Oct 18 | CPU pod: update ComfyUI, download models. Then A40: get stock LTX-2 i2v + depth IC-LoRA running. |
 | 2 | Oct 19 | Install `comfyui-reshoot`, check warp output on 3 clips, Path 1 vs Path 2 spike. |
 | 3–4 | Oct 20–21 | Finish the full graph, export `reshoot_api.json`, wire up the app end to end. |
 | 5–6 | Oct 22–23 | Quality: depth smoothing, hole handling, prompt defaults, presets that look cinematic. |
@@ -128,5 +128,43 @@ Keep these titles stable and the app never needs to know the rest of the graph.
   (published Comfy app/workflow vs. any hosted UI). The Gradio app is a fallback either way.
 - **Public hosting** — a RunPod pod is not a public app. Options: a RunPod serverless endpoint
   running ComfyUI, or Comfy's own hosting if the platform provides it.
-- **GPU** — A40 is fine for development. LTX-2 FP8 checkpoints get no FP8 speed-up on Ampere,
-  so use H100 for final renders and the demo reel.
+- **GPU** — A40 only (see §7). LTX-2 FP8 checkpoints get no FP8 speed-up on Ampere, so prefer
+  a distilled / few-step LTX-2 checkpoint if one is published.
+- **Comfy signup credits** — the first 200 signups get free credits. If those run open-weights
+  workflows on Comfy's own cloud, they can replace RunPod hours. Check right away.
+
+## 7. Budget: $29.12 hard limit
+
+RunPod credit is prepaid. If it hits $0, pods are shut down and the network volume can be
+**deleted**, so the plan keeps a buffer and never runs the balance down.
+
+| Item | Rate | Amount |
+|---|---|---|
+| Network volume, 100 GB, Oct 18 → Oct 30 | $14/mo | ~$5.60 |
+| Setup and model downloads on a **CPU pod** (not a GPU pod) | ~$0.10/hr | ~$0.50 |
+| A40 GPU time, ~30 h | $0.61/hr | ~$18.30 |
+| **Buffer, never spend** | | **~$4.70** |
+
+GPU hours (A40), by phase:
+
+| Phase | Hours |
+|---|---|
+| Day 1–2: stock LTX-2 test + Path 1/2 spike | 4 |
+| Day 3–4: full graph + app wiring | 8 |
+| Day 5–7: quality and multi-shot | 8 |
+| Day 9–10: showcase renders | 8 |
+| Day 11: demo recording | 2 |
+
+Rules:
+1. **Everything that doesn't need LTX runs on the laptop.** The warp node is plain numpy, and
+   Depth Anything V2 Small runs on CPU. Tune camera moves and the warp locally.
+2. **Downloads and installs on a CPU pod** attached to the same network volume. Never pay A40 rates
+   to watch a progress bar.
+3. **Start `scripts/idle_shutdown.sh` on every GPU pod.** It terminates the pod after 20 idle
+   minutes or 4 hours, whichever comes first. Test it once on the CPU pod with `IDLE_MIN=1`.
+4. **Develop at 512 px wide, 49 frames.** Only showcase renders go to 768 px / 97 frames.
+5. **Check the balance every day** in the RunPod console. Stop GPU work once it reaches $8.
+   That leaves the volume running until submission, plus the buffer.
+6. **Delete the network volume right after submitting** (download the showcase clips first).
+   Judges get the open-source repo + setup steps + demo video. No GPU will be hosted for them.
+7. **No H100.** At $3.99/hr, one hour of H100 costs as much as 6.5 hours of A40.

@@ -51,4 +51,6 @@ echo "== App dependencies"
 
 echo
 echo "Done. Restart ComfyUI, then check the 'Reshoot' node category appears."
+echo "Budget guard (run on every GPU pod):"
+echo "  nohup bash $REPO_DIR/scripts/idle_shutdown.sh > /workspace/idle_shutdown.log 2>&1 &"
 echo "App: $PY $REPO_DIR/app/app.py --comfy http://127.0.0.1:8188   (expose port 7860 on the pod)"
