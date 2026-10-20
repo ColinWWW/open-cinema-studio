@@ -2,10 +2,18 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+node_modules/
+dist/
 *.safetensors
 *.ckpt
 outputs/
 *.mp4
 *.webm
 *.mov
-!docs/media/*.mp4
+!examples/*.mp4
+
+# Third-party reference photos (not ours to redistribute)
+examples/ref_street*
+
+# Blocking tool playblasts written by the dev server
+web/exports/

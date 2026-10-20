@@ -1,55 +1,71 @@
-# Reshoot
+# Open Cinema Studio
 
-Re-film any video from a new camera angle: orbit around the subject, crane up, dolly in.
-Built on ComfyUI with **open-weights models only** (LTX-2 + Depth Anything V2 Small).
+Block out a shot with grey boxes and a camera path in your browser, give it one art-direction
+frame, and get back a cinematic clip that follows your exact camera move and layout.
+Open-weights only: **LTX-2.5 + the Layout-to-Render IC-LoRA**, running in ComfyUI.
 
-Entry for the [Comfy Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield):
-Open Weights Only + VFX Workflow Built with LTX.
+Entry for the [Comfy Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield)
+(Open Weights Only + VFX Workflow Built with LTX). Name TBD.
+
+> Status: early. The go/no-go render passed (stage 1 on an A40 follows the layout box for box when the
+> first frame matches it). The blocking tool (`web/`) works locally; wiring it to ComfyUI is next.
+> Plan, specs and budget: [docs/PLAN.md](docs/PLAN.md).
 
 ## How it works
 
-1. **Depth** — Depth Anything V2 estimates depth for every frame.
-2. **Re-projection** — the `comfyui-reshoot` node pack lifts each frame into 3D and re-renders it
-   from a new camera path. You get a warped clip, depth from the new viewpoint, and a mask of
-   everything the original camera never saw.
-3. **Generation** — LTX-2 regenerates the clip, guided by the new-view depth (IC-LoRA) and the
-   first frame, and fills in the unseen areas.
+1. **Block** — place primitives and keyframe a camera in a three.js editor.
+2. **Playblast** — export the grey scene deterministically: 24 fps, 8k+1 frames, dimensions divisible by 64.
+3. **Art-direct** — supply a finished-looking first frame.
+4. **Render** — LTX-2.5 + Layout-to-Render follows the layout clip's camera and blocking, and takes its look from the first frame.
 
-Full design: [docs/WORKFLOW_PLAN.md](docs/WORKFLOW_PLAN.md).
+## Blocking tool
 
-## Repo layout
-
-| Path | What |
-|---|---|
-| `custom_nodes/comfyui-reshoot/` | ComfyUI nodes: Camera Move, Depth Warp, Fit for LTX |
-| `app/` | Gradio web app that drives ComfyUI over its API |
-| `workflows/` | ComfyUI workflows (UI + API format) |
-| `scripts/runpod_setup.sh` | One-shot setup on a RunPod ComfyUI pod |
-| `scripts/check_open_weights.py` | Scans a workflow for API/partner nodes |
-| `tests/` | Unit tests for the camera and warp maths |
-
-## Setup (RunPod)
+Needs Node 20+ and Chrome or Edge (the playblast is encoded in the browser with WebCodecs).
 
 ```bash
-cd /workspace && git clone <this repo> reshoot && cd reshoot
-bash scripts/runpod_setup.sh
-# restart ComfyUI, load workflows/reshoot.json, then:
-python app/app.py --comfy http://127.0.0.1:8188
+cd web && npm install && npm run dev
 ```
 
-Expose HTTP port 7860 on the pod to reach the app.
+Open http://localhost:5173, add boxes, people and walls, then turn on **Look through shot camera**,
+frame the shot and press **K** to key it on the timeline. **Export playblast** renders every frame at
+exactly 1/24 s steps to an H.264 MP4 (960×576 or 1920×1088, 65/97/121 frames) plus a PNG of frame 0.
+With the dev server running, exports are also written to `web/exports/`. Scenes save as JSON;
+the **Blocks** and **Plaza** presets reproduce `scripts/make_test_layout.py`'s clips.
+
+Tests: `cd web && npm test`.
+
+## Try the pipeline now
+
+Make a test layout clip locally (needs Python with numpy, and ffmpeg or `pip install imageio-ffmpeg`):
+
+```bash
+python scripts/make_test_layout.py --move dolly_in -o examples/layout_dolly_in.mp4
+```
+
+Moves: `dolly_in`, `orbit`, `crane_up`, `truck`.
+
+## GPU setup (RunPod)
+
+On a RunPod "ComfyUI – CUDA 12.8" pod with a ≥ 60 GB volume at `/workspace`:
+
+```bash
+cd /workspace && git clone <this repo> cinema-studio && cd cinema-studio
+nohup bash scripts/idle_shutdown.sh > /workspace/idle_shutdown.log 2>&1 &   # terminates the pod when idle
+bash scripts/setup_pod.sh                                                   # ComfyUI-LTXVideo + ~42 GB of models
+```
+
+First accept the terms on both gated Hugging Face repos (see below) and have a Read token ready.
 
 ## Models and licenses
 
 | Model | Use | License |
 |---|---|---|
-| LTX-2 (Lightricks) | video generation | LTX open-weights license |
-| LTX-2 depth IC-LoRA | structure guidance | LTX open-weights license |
-| Depth Anything V2 Small | depth estimation | Apache-2.0 |
+| [LTX-2.5 22B distilled (int8)](https://huggingface.co/Lightricks/LTX-2.5) + Gemma text encoder, VAEs, x2 upscaler | video generation | LTX-2.x community license (gated) |
+| [LTX-2.5 IC-LoRA Layout-to-Render](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render) | layout → finished shot | LTX-2.x community license (gated) |
 
-No partner nodes or closed APIs are used anywhere: in the workflow or in the app.
-Check with `python scripts/check_open_weights.py workflows/*.json`.
+No partner nodes or closed APIs are used. Check any workflow with
+`python scripts/check_open_weights.py workflows/*.json`.
 
 ## License
 
-Code: MIT (see [LICENSE](LICENSE)). Models are under their own licenses above.
+Code: MIT ([LICENSE](LICENSE)). Model weights are under their own licenses above.
