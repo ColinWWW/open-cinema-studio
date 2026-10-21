@@ -1,0 +1,13 @@
+# Cloudflare Worker: Comfy API pass-through for the live page. Deploy steps: docs/LIVE_RENDER.md.
+name = "ocs-comfy-relay"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# No KV, D1, R2 or other storage bindings, and no logs: the relay keeps nothing.
+[observability]
+enabled = false
+
+[vars]
+# Comma-separated page origins allowed to use the relay (no trailing slash, no path).
+ALLOWED_ORIGINS = "https://colinwww.github.io,http://localhost:5173,http://127.0.0.1:4173"
+UPSTREAM = "https://cloud.comfy.org"
