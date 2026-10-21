@@ -110,6 +110,11 @@ grey layout inset (<code>scripts/four_moves.py</code>). Clips:
   [`layout_demo_scene.mp4`](examples/layout_demo_scene.mp4), look still
   [`look_demo_scene_a40.png`](examples/look_demo_scene_a40.png) and render
   [`stage1_demo_scene_a40.mp4`](examples/stage1_demo_scene_a40.mp4)
+- A crowd: ten person stand-ins keyed to dance round a ring in a club, under a high push-in
+  ([`club_scene.json`](examples/club_scene.json)), layout [`layout_club_ring.mp4`](examples/layout_club_ring.mp4),
+  look still [`look_club_ring_a40.png`](examples/look_club_ring_a40.png) and render
+  [`stage1_club_ring_a40.mp4`](examples/stage1_club_ring_a40.mp4). With this many people the look still needs
+  `--strength 0.65`: at the default 1.0 the capsules come back as glowing pills, not people.
 
 A look still that names something the layout doesn't have (a clock tower where the layout has sky) puts it
 there anyway, and the render follows the still rather than the layout. The same goes for leaving the sky
