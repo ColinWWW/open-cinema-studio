@@ -22,12 +22,16 @@ A page served from another origin (e.g. GitHub Pages) can call the server when i
 --cors-origin https://colinwww.github.io: CORS headers (and preflight answers) go to that origin only.
 
 Jobs (renders and looks) run one at a time (one GPU), in submission order. Files go to server/renders/<id>/.
+Only the newest --keep-jobs finished jobs (default 200) are kept, with their folders; queued and running jobs,
+and renders that a kept sequence was cut from, are never pruned.
 """
 
 import argparse
 import asyncio
 import logging
 import os
+import re
+import shutil
 import time
 import uuid
 from pathlib import Path
@@ -43,6 +47,8 @@ from .workflow import check_dims, look_size
 RENDERS = Path(__file__).resolve().parent / "renders"
 MAX_UPLOAD = 200 * 1024 * 1024
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp"}
+KEEP_JOBS = 200
+FINISHED = ("succeeded", "failed", "cancelled")
 SERVICE = web.AppKey("service", object)
 log = logging.getLogger(__name__)
 
@@ -54,11 +60,38 @@ class RenderService:
                "sequence": ("sequence.mp4", "video")}
     MAX_SHOTS = 24
 
-    def __init__(self, client, renders_dir=RENDERS):
+    def __init__(self, client, renders_dir=RENDERS, keep_jobs=KEEP_JOBS):
         self.client = client
         self.dir = Path(renders_dir)
+        self.keep_jobs = keep_jobs  # 0: keep everything
         self.jobs = {}
         self.lock = asyncio.Lock()  # one job at a time
+        self._prune_old_folders()
+
+    def _prune_old_folders(self):
+        """Job folders left by an earlier run (no job knows them any more): keep the newest keep_jobs."""
+        if not self.keep_jobs or not self.dir.is_dir():
+            return
+        old = [d for d in self.dir.iterdir() if d.is_dir() and re.fullmatch(r"[0-9a-f]{12}", d.name)]
+        old.sort(key=lambda d: d.stat().st_mtime, reverse=True)
+        for d in old[self.keep_jobs:]:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def prune(self):
+        """Drop finished jobs (and their folders) older than the newest keep_jobs. Queued and running jobs stay,
+        and so does any render that a remaining sequence was cut from (it goes once that sequence has)."""
+        if not self.keep_jobs:
+            return
+        finished = sorted((j for j in self.jobs.values() if j["status"] in FINISHED), key=lambda j: j.get("created", 0))
+        old = [j["id"] for j in finished[:-self.keep_jobs]]
+        while old:
+            needed = {r for j in self.jobs.values() if j["kind"] == "sequence" for r in j.get("renders", ())}
+            drop = [rid for rid in old if rid not in needed]
+            if not drop:
+                return
+            for rid in drop:
+                shutil.rmtree(self.jobs.pop(rid)["_folder"], ignore_errors=True)
+            old = [rid for rid in old if rid in needed]
 
     def public(self, rid):
         job = self.jobs[rid]
@@ -129,6 +162,7 @@ class RenderService:
         except (RuntimeError, OSError) as e:  # OSError: ffmpeg missing or not runnable
             job.update(status="failed", stage="failed", error=str(e))
         job["seconds"] = round(time.time() - t0, 1)
+        self.prune()
         return rid
 
     async def cancel(self, rid):
@@ -190,6 +224,7 @@ class RenderService:
             job["seconds"] = round(time.time() - t0, 1)
             for key in ("node", "step", "steps"):
                 job.pop(key, None)
+            self.prune()
 
 
 def _describe(e):
@@ -330,16 +365,19 @@ def cors_middleware(origin):
             except web.HTTPException as e:  # 404/405 from the router: still readable by the page
                 e.headers.update({"Access-Control-Allow-Origin": origin, "Vary": "Origin"})
                 raise
+            except Exception as e:  # noqa: BLE001 - a bug in a handler: the page should see it, not "Failed to fetch"
+                log.exception("%s %s failed", request.method, request.path)
+                resp = web.json_response({"error": f"server error: {type(e).__name__}: {e}"}, status=500)
         resp.headers.update({"Access-Control-Allow-Origin": origin, "Vary": "Origin"})
         return resp
 
     return cors
 
 
-def make_app(client, renders_dir=RENDERS, cors_origin=None):
+def make_app(client, renders_dir=RENDERS, cors_origin=None, keep_jobs=KEEP_JOBS):
     middlewares = [cors_middleware(check_origin(cors_origin))] if cors_origin else []
     app = web.Application(client_max_size=MAX_UPLOAD, middlewares=middlewares)
-    app[SERVICE] = RenderService(client, renders_dir)
+    app[SERVICE] = RenderService(client, renders_dir, keep_jobs)
     app.add_routes([
         web.get("/api/health", health),
         web.post("/api/render", create),
@@ -359,7 +397,12 @@ def main():
     ap.add_argument("--host", default="127.0.0.1", help="interface to listen on (0.0.0.0 on a pod)")
     ap.add_argument("--comfy-url", help="sets COMFY_BASE_URL (default: Comfy Cloud, or the env var)")
     ap.add_argument("--cors-origin", help="let a page on this origin call the server, e.g. https://colinwww.github.io")
+    ap.add_argument("--keep-jobs", type=int, default=KEEP_JOBS,
+                    help=f"finished jobs (and server/renders/<id>/ folders) to keep, newest first; 0 keeps all "
+                         f"(default {KEEP_JOBS})")
     args = ap.parse_args()
+    if args.keep_jobs < 0:
+        ap.error("--keep-jobs must be 0 or more")
     if args.cors_origin:
         try:
             args.cors_origin = check_origin(args.cors_origin)
@@ -370,7 +413,7 @@ def main():
 
     async def app_factory():
         client = tolerate_head_rewrites(AsyncComfy(timeout=120.0))
-        app = make_app(client, cors_origin=args.cors_origin)
+        app = make_app(client, cors_origin=args.cors_origin, keep_jobs=args.keep_jobs)
         app.on_cleanup.append(lambda _: client.aclose())
         cors = f" (CORS: {args.cors_origin})" if args.cors_origin else ""
         print(f"render server on http://{args.host}:{args.port} -> {client!r}{cors}")
