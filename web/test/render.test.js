@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   apiUrl, aspectWarning, checkHealth, describeState, loadServer, lookForm, normalizeServer, promptWarnings, renderForm,
-  cancelJob, runJob, runRender, saveServer, serverCommand, stitchShots,
+  cancelJob, fetchBlob, parseSeed, runJob, runRender, saveServer, serverCommand, stitchShots,
 } from '../src/render.js';
 
 test('promptWarnings flags empty prompts and layout words', () => {
@@ -166,4 +166,39 @@ test('stitchShots posts the render ids and returns the sequence', async () => {
   assert.deepEqual(calls, [['http://pod:8190/api/stitch', 'POST', 'application/json', { renders: ['a', 'b'], clip: 'layout' }]]);
   await assert.rejects(stitchShots(['a'], { fetchFn: async () => reply({ error: 'send 2 to 24 render ids' }, 400) }), /2 to 24/);
   await assert.rejects(stitchShots(['a', 'b'], { fetchFn: async () => reply({ status: 'failed', error: 'ffmpeg could not join' }, 500) }), /ffmpeg/);
+});
+
+test('runJob rides out dropped polls and proxy 5xx, but not a missing job', async () => {
+  const replies = [
+    () => { throw new TypeError('Failed to fetch'); },
+    () => reply({ error: 'bad gateway' }, 502),
+    () => reply({ id: 'r3', status: 'succeeded', video_url: '/api/render/r3/video' }),
+  ];
+  const waits = [];
+  const fetchFn = async (url) => (url === '/api/render' ? reply({ id: 'r3', status: 'queued' }) : replies.shift()());
+  const final = await runRender(new FormData(), { fetchFn, pollMs: 10, sleep: async (ms) => waits.push(ms) });
+  assert.equal(final.status, 'succeeded');
+  assert.deepEqual(waits, [10, 10, 20]); // the poll interval, then backoff on each retry
+
+  const gone = async (url) => (url === '/api/render' ? reply({ id: 'r4', status: 'queued' }) : reply({ error: 'unknown job' }, 404));
+  await assert.rejects(runRender(new FormData(), { fetchFn: gone, sleep: async () => {} }), /unknown job/);
+
+  const down = async (url) => {
+    if (url === '/api/render') return reply({ id: 'r5', status: 'queued' });
+    throw new TypeError('Failed to fetch');
+  };
+  await assert.rejects(runRender(new FormData(), { fetchFn: down, retries: 2, sleep: async () => {} }), /Failed to fetch/);
+});
+
+test('fetchBlob throws on an error reply instead of returning it as the file', async () => {
+  const ok = async (url) => new Response('mp4', { status: 200, headers: { 'X-Url': url } });
+  assert.equal(await (await fetchBlob('http://h:8190', '/api/render/r1/video', { fetchFn: ok })).text(), 'mp4');
+  const missing = async () => new Response(JSON.stringify({ error: 'no result yet' }), { status: 404 });
+  await assert.rejects(fetchBlob('', '/api/render/r1/video', { fetchFn: missing }), /no result yet/);
+});
+
+test('parseSeed keeps 0 and falls back to 42 for anything else', () => {
+  assert.equal(parseSeed('0'), 0);
+  assert.equal(parseSeed('7'), 7);
+  for (const bad of ['', '  ', 'abc', '-1', '1.5', undefined]) assert.equal(parseSeed(bad), 42);
 });

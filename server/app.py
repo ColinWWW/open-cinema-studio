@@ -26,6 +26,7 @@ Jobs (renders and looks) run one at a time (one GPU), in submission order. Files
 
 import argparse
 import asyncio
+import logging
 import os
 import time
 import uuid
@@ -43,6 +44,7 @@ RENDERS = Path(__file__).resolve().parent / "renders"
 MAX_UPLOAD = 200 * 1024 * 1024
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp"}
 SERVICE = web.AppKey("service", object)
+log = logging.getLogger(__name__)
 
 
 class RenderService:
@@ -124,7 +126,7 @@ class RenderService:
             name = "render.mp4" if clip == "render" else "layout.mp4"
             await stitch([j["_folder"] / name for j in jobs], self.result_path(rid))
             job.update(status="succeeded", stage="done", progress=1.0)
-        except RuntimeError as e:
+        except (RuntimeError, OSError) as e:  # OSError: ffmpeg missing or not runnable
             job.update(status="failed", stage="failed", error=str(e))
         job["seconds"] = round(time.time() - t0, 1)
         return rid
@@ -177,10 +179,12 @@ class RenderService:
             if not job.get("_cancelled"):
                 raise
             job.update(status="cancelled", stage="cancelled", error="cancelled")
-        except (ComfyError, RuntimeError, ValueError, OSError) as e:
+        except Exception as e:  # noqa: BLE001 - anything (e.g. httpx.ConnectError from a restarting pod) ends the job
             if job.get("_cancelled"):
                 job.update(status="cancelled", stage="cancelled", error="cancelled")
             else:
+                if not isinstance(e, (ComfyError, RuntimeError, ValueError, OSError)):
+                    log.exception("job %s failed", rid)
                 job.update(status="failed", stage="failed", error=_describe(e))
         finally:
             job["seconds"] = round(time.time() - t0, 1)

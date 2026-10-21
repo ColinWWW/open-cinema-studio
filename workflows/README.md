@@ -61,4 +61,5 @@ Once it runs on the pod (int8 loaders, stage 1 only at first):
 2. **Workflow > Export (API)** → `workflows/cinema_studio_api.json` (our modified version, the one the server runs).
 3. Run `python scripts/check_open_weights.py workflows/cinema_studio_api.json` before committing.
 
-`server/comfy_client.py` patches inputs by these titles, so node ids never matter.
+The server doesn't run this export: it builds its own graph (`server/workflow.py`) and sets inputs by
+node id (`NODES`). The titles just mark which inputs to change if you run the official graph by hand.

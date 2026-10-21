@@ -1,9 +1,10 @@
 import json
+import re
 import unittest
 from pathlib import Path
 
 from server.mock_comfyui import REQUIRED, validate
-from server.render import png_size, progress_fields, prompt_warnings, uses_stage2
+from server.render import BANNED_WORDS, png_size, progress_fields, prompt_warnings, uses_stage2
 from server.workflow import (LOOK_NODES, NODES, STAGE2_SIGMAS, WORKFLOW_FILES, build_look_still, build_stage1,
                              build_two_stage, check_dims, look_size, stage1_size)
 from server.tests.pngs import gray_png
@@ -145,6 +146,13 @@ class LookStillWorkflowTest(unittest.TestCase):
     def test_prompt_warnings(self):
         self.assertEqual(prompt_warnings("A sunny plaza at noon."), [])
         self.assertEqual(len(prompt_warnings("Clay boxes in 3D")), 2)
+        self.assertEqual(len(prompt_warnings("Clay-like boxes; 3D/unreal look")), 3)  # split like the web
+        self.assertEqual(prompt_warnings("A 3Dog bakery"), [])  # whole words only
+
+    def test_banned_words_match_the_web(self):
+        js = (Path(__file__).resolve().parents[2] / "web" / "src" / "render.js").read_text(encoding="utf-8")
+        web = re.search(r"const BANNED = \[([^\]]*)\]", js).group(1)
+        self.assertEqual(tuple(re.findall(r"'([^']+)'", web)), BANNED_WORDS)
 
 
 if __name__ == "__main__":
