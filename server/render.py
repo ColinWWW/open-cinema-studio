@@ -37,12 +37,12 @@ def tolerate_head_rewrites(client):
 
     low = getattr(client, "_low", None)
     prep = getattr(low, "_p", None)
-    if not all(hasattr(o, a) for o, a in ((prep, "url"), (prep, "base_url"), (low, "head_asset_by_hash"),
-                                          (low, "raw_request"))):
+    if not all(hasattr(o, a) for o, a in ((prep, "url"), (prep, "base_url"), (prep, "parse_or_raise"),
+                                          (low, "head_asset_by_hash"), (low, "raw_request"))):
         raise RuntimeError("this comfy-sdk version changed the internals tolerate_head_rewrites patches: "
                            "install comfy-sdk 0.5.x (server/requirements.txt) or update the shim")
     base = urlsplit(prep.base_url)
-    original_url, original_head = prep.url, low.head_asset_by_hash
+    original_url = prep.url
 
     def url(path):
         u = urlsplit(path) if path.startswith("http") else None
@@ -51,10 +51,13 @@ def tolerate_head_rewrites(client):
         return original_url(path)
 
     async def head_asset_by_hash(digest, **kw):
-        resp = await low.raw_request("HEAD", f"/assets/by-hash/{digest}")
-        if resp.status_code == 405:
+        # the SDK's own version (comfy_low 0.5.x), plus 405, from the one HEAD request
+        resp = await low.raw_request("HEAD", f"/assets/by-hash/{digest}", **kw)
+        if resp.status_code in (404, 405):
             return False
-        return await original_head(digest, **kw)
+        if resp.status_code == 200:
+            return True
+        return bool(prep.parse_or_raise(resp, (200,)))
 
     prep.url = url
     low.head_asset_by_hash = head_asset_by_hash

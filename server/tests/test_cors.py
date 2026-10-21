@@ -15,6 +15,11 @@ class FakeComfy:
         return "FakeComfy()"
 
 
+class BrokenComfy:
+    def __repr__(self):
+        raise RuntimeError("boom")
+
+
 class CheckOriginTest(unittest.TestCase):
     def test_bare_origins(self):
         self.assertEqual(check_origin(PAGES), PAGES)
@@ -76,6 +81,19 @@ class CorsTest(unittest.IsolatedAsyncioTestCase):
         res = await self.http.get("/api/health")
         self.assertEqual(res.status, 200)
         self.assertNotIn("Access-Control-Allow-Origin", res.headers)
+
+
+class UnexpectedErrorTest(unittest.IsolatedAsyncioTestCase):
+    async def test_handler_bug_is_a_readable_json_500(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = make_app(BrokenComfy(), renders_dir=tmp, cors_origin=PAGES)
+            async with TestClient(TestServer(app)) as http:
+                with self.assertLogs("server.app", "ERROR") as logs:
+                    res = await http.get("/api/health", headers={"Origin": PAGES})
+                self.assertEqual(res.status, 500)
+                self.assertEqual(res.headers["Access-Control-Allow-Origin"], PAGES)
+                self.assertEqual(await res.json(), {"error": "server error: RuntimeError: boom"})
+                self.assertIn("Traceback", logs.output[0])
 
 
 class NoCorsTest(unittest.IsolatedAsyncioTestCase):
