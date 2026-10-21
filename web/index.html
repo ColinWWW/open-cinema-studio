@@ -54,6 +54,20 @@
         </section>
 
         <section>
+          <h2>Shots <span class="muted">cut together in this order</span></h2>
+          <div class="row shot-row">
+            <select id="shot" title="Each shot is its own camera over the same blocking"></select>
+            <button id="shot-add" title="New shot after this one (starts as a copy of its camera)">+ Shot</button>
+          </div>
+          <div class="row shot-row">
+            <input id="shot-name" type="text" spellcheck="false" title="Shot name" />
+            <button id="shot-up" title="Earlier in the cut">↑</button>
+            <button id="shot-down" title="Later in the cut">↓</button>
+            <button id="shot-del" title="Delete this shot">✕</button>
+          </div>
+        </section>
+
+        <section>
           <h2>Shot camera</h2>
           <button id="pilot" class="wide-btn" title="C">Look through shot camera</button>
           <label class="wide">Lens (vertical fov °) <input id="cam-fov" type="number" min="10" max="120" step="1" /></label>
@@ -141,6 +155,7 @@
           <div class="render-row">
             <label>Seed <input id="render-seed" type="number" value="42" step="1" /></label>
             <button id="render-go" class="primary" disabled>Render shot</button>
+            <button id="render-all" title="For every shot, in order: export its playblast, generate its look still (same prompt and seed), render it; then cut the renders together into one sequence" disabled>Render all shots</button>
           </div>
           <p id="render-hints" class="hint"></p>
         </div>
@@ -155,6 +170,7 @@
       <div class="render-row">
         <button id="render-play">Play both</button>
         <a id="render-download" hidden>Download render</a>
+        <a id="render-download-layout" hidden>Download layout sequence</a>
       </div>
     </div>
 

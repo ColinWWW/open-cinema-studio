@@ -68,7 +68,8 @@ cd web && npm install && npm run dev
 
 Open http://localhost:5173, add boxes, people and walls, then turn on **Look through shot camera**,
 frame the shot and press **K** to key it on the timeline. Or frame frame 0 and pick a one-click move under
-**Apply move**: dolly in/out, truck, crane, orbit or locked off. **Export playblast** renders every frame at
+**Apply move**: dolly in/out, truck, crane, orbit or locked off. A scene can hold several **shots** (cameras
+over the same blocking): **+ Shot** copies the current one, ↑/↓ set the order of the cut. **Export playblast** renders every frame at
 exactly 1/24 s steps to an H.264 MP4 (960×576 or 1920×1088, 65/97/121 frames) plus PNGs of frame 0 and
 its depth map (near = white, sky = black).
 With the dev server running, exports are also written to `web/exports/`. Scenes save as JSON;
@@ -104,7 +105,12 @@ Because the still is generated from the layout's own depth, it lines up with the
 which is what makes the video render keep both the look and the layout (a still that doesn't match
 wins over the layout). Not happy? Change the seed or the prompt and generate again, or press **3 variants** for three seeds at
 once: every still stays in a strip under the panel, so you can click back to the one you liked.
-**Prompt ideas…** fills in a starter prompt. Then press
+**Prompt ideas…** fills in a starter prompt.
+
+**Render all shots** renders a whole scene: for each shot, in order, it exports the playblast, generates its
+look still (same prompt and seed for every shot, so they share a look) and renders it, then cuts the renders
+together into one sequence, with the layout sequence beside it to compare (`POST /api/stitch`, no re-encode).
+Budget about 2.5–4 minutes per 65-frame shot on an A40. Then press
 **Render shot**. **Choose look still…** still takes your own image instead (same framing as frame 0).
 
 Without the server:
@@ -112,6 +118,7 @@ Without the server:
 ```bash
 python -m server.look web/exports/<shot>_depth.png "prompt" -o look.png        # look still (~1 MP, then playblast size)
 python -m server.render web/exports/<shot>.mp4 look.png "prompt" -o out.mp4    # the clip
+python -m server.stitch shot1.mp4 shot2.mp4 shot3.mp4 -o sequence.mp4          # cut renders together
 ```
 
 No GPU? Run the whole chain against a stand-in ComfyUI that returns the layout as the "render" (and

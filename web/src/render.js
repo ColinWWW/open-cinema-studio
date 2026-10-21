@@ -109,6 +109,16 @@ export async function runJob(kind, form, { server = '', fetchFn = fetch, onUpdat
 
 export const runRender = (form, opts) => runJob('render', form, opts);
 
+/** POST /api/stitch: cut finished renders (clip 'render') or their layout clips ('layout') together, in order. */
+export async function stitchShots(ids, { server = '', clip = 'render', fetchFn = fetch } = {}) {
+  const res = await fetchFn(apiUrl(server, '/api/stitch'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ renders: ids, clip }),
+  });
+  const seq = await json(res);
+  if (seq.status !== 'succeeded') throw new Error(seq.error || 'could not join the shots');
+  return seq;
+}
+
 /** GET /api/health on the render server. Resolves with {ok, target}; throws if nothing (or not our server) answers. */
 export async function checkHealth(server, { fetchFn = fetch, timeoutMs = 5000 } = {}) {
   const signal = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(timeoutMs) : undefined;
@@ -139,7 +149,7 @@ export function describeState(s) {
  * a file, or is generated from frame 0's depth map (POST /api/look) so it matches the layout box for box.
  * When no render server answers, the panel shows the bundled plaza example instead (demo mode).
  */
-export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = false }) {
+export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, proxied = false }) {
   const $ = (id) => document.getElementById(id);
   const panel = $('render-panel');
   let server = loadServer();
@@ -163,6 +173,10 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
     $('render-go').disabled = busy || demoMode || !look || noPrompt;
     $('render-generate').disabled = busy || demoMode || noPrompt;
     $('render-variants-go').disabled = busy || demoMode || noPrompt;
+    const shots = getScene().shots.length;
+    $('render-all').disabled = busy || demoMode || noPrompt || shots < 2;
+    $('render-all').textContent = shots < 2 ? 'Render all shots' : `Render all ${shots} shots`;
+    $('render-all').title = shots < 2 ? 'Add shots (Shots > + Shot) to render a sequence' : $('render-all').dataset.title;
     if (demoMode) {
       $('render-hints').textContent = 'Connect a render server to generate look stills and render your own shot.';
       return;
@@ -190,6 +204,7 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
         $(id).src = demo[key];
       }
       $('render-download').hidden = true;
+      $('render-download-layout').hidden = true;
       $('render-play').click();
     } else {
       setUrl($('render-frame0'), blast?.firstFrame);
@@ -198,6 +213,7 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
       setUrl($('render-look-img'), look?.blob);
       setUrl($('render-result'), rendered);
       $('render-download').hidden = !rendered;
+      $('render-download-layout').hidden = true;
       if (rendered) $('render-download').href = urls.get($('render-result'));
     }
     refreshHints();
@@ -220,7 +236,7 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
     const img = document.createElement('img');
     img.src = URL.createObjectURL(still.blob);
     const cap = document.createElement('span');
-    cap.textContent = `seed ${still.seed}`;
+    cap.textContent = still.caption || `seed ${still.seed}`;
     b.append(img, cap);
     b.addEventListener('click', () => setLook(still.blob, still.name, still.width, still.height, still.key));
     strip.prepend(b);
@@ -289,11 +305,13 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
       $('render-server').classList.add('bad');
       return;
     }
-    $('render-server-url').value = server;
+    $('render-all').dataset.title = $('render-all').title;
+  $('render-server-url').value = server;
     saveServer(server);
     checkServer();
   };
 
+  $('render-all').dataset.title = $('render-all').title;
   $('render-server-url').value = server;
   $('render-server-url').addEventListener('change', connect);
   $('render-connect').addEventListener('click', connect);
@@ -358,6 +376,50 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
     refreshHints();
   });
 
+  /** Show a finished clip in the result player with a download link. */
+  function showResult(blob, filename, link = 'render-download', el = 'render-result', text = 'Download render') {
+    setUrl($(el), blob);
+    const a = $(link);
+    a.textContent = text;
+    a.href = urls.get($(el));
+    a.download = filename;
+    a.hidden = false;
+  }
+
+  $('render-all').addEventListener('click', () =>
+    withBusy('Sequence', async (status, onUpdate) => {
+      for (const id of ['render-download', 'render-download-layout']) $(id).hidden = true;
+      const prompt = $('render-prompt').value;
+      const n = getScene().shots.length;
+      const ids = [];
+      for (let i = 0; i < n; i++) {
+        const stem = showShot(i);
+        const label = `Shot ${i + 1}/${n}`;
+        const { depth, mp4 } = await currentBlast(status);
+        const scene = getScene();
+        const lookJob = await runJob('look', lookForm({ depth, prompt, output: scene.output, seed: seed() }), {
+          server, onUpdate: (s) => onUpdate({ ...s, label: `${label} look still` }),
+        });
+        const still = await (await fetch(apiUrl(server, lookJob.image_url))).blob();
+        addStill({ blob: still, name: `${stem}_look.png`, width: scene.output.width, height: scene.output.height, key: blast.key, seed: seed(), prompt, caption: `shot ${i + 1}` });
+        setLook(still, `${stem}_look.png`, scene.output.width, scene.output.height, blast.key);
+        const form = renderForm({ mp4, look: still, lookName: `${stem}_look.png`, prompt, output: scene.output, seed: seed() });
+        const final = await runRender(form, { server, onUpdate: (s) => onUpdate({ ...s, label: `${label} render` }) });
+        ids.push(final.id);
+      }
+      status.textContent = 'Cutting the shots together…';
+      const [seq, layout] = await Promise.all([stitchShots(ids, { server }), stitchShots(ids, { server, clip: 'layout' })]);
+      const name = (getScene().name || 'scene').replace(/[^\w.-]+/g, '_');
+      rendered = await (await fetch(apiUrl(server, seq.video_url))).blob();
+      showResult(rendered, `${name}_sequence_${seq.id}.mp4`, 'render-download', 'render-result', 'Download sequence');
+      showResult(await (await fetch(apiUrl(server, layout.video_url))).blob(), `${name}_layout_sequence_${layout.id}.mp4`,
+        'render-download-layout', 'render-blast', 'Download layout sequence');
+      blast = null; // the playblast player now shows the layout sequence
+      status.textContent = `Sequence done: ${n} shots, ${seq.frames} frames (${(seq.frames / 24).toFixed(1)} s).`;
+      $('render-play').click();
+    }),
+  );
+
   $('render-play').addEventListener('click', () => {
     for (const v of [$('render-blast'), $('render-result')]) {
       v.currentTime = 0;
@@ -367,7 +429,7 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
 
   $('render-go').addEventListener('click', () =>
     withBusy('Render', async (status, onUpdate) => {
-      $('render-download').hidden = true;
+      for (const id of ['render-download', 'render-download-layout']) $(id).hidden = true;
       const { mp4 } = await currentBlast(status);
       const scene = getScene();
       const form = renderForm({
@@ -376,11 +438,7 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
       });
       const final = await runRender(form, { server, onUpdate });
       rendered = await (await fetch(apiUrl(server, final.video_url))).blob();
-      setUrl($('render-result'), rendered);
-      const a = $('render-download');
-      a.href = urls.get($('render-result'));
-      a.download = `${(scene.name || 'shot').replace(/[^\w.-]+/g, '_')}_render_${final.id}.mp4`;
-      a.hidden = false;
+      showResult(rendered, `${(scene.name || 'shot').replace(/[^\w.-]+/g, '_')}_render_${final.id}.mp4`);
       $('render-play').click();
     }),
   );

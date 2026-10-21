@@ -68,6 +68,6 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    proxy: { '/api/render': RENDER_SERVER, '/api/look': RENDER_SERVER, '/api/health': RENDER_SERVER },
+    proxy: Object.fromEntries(['/api/render', '/api/look', '/api/stitch', '/api/sequence', '/api/health'].map((p) => [p, RENDER_SERVER])),
   },
 });

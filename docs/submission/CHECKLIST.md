@@ -31,7 +31,8 @@ of Oct 29 through the [form](https://form.typeform.com/to/V1dSQrkS). Rules and D
 
 ## Before submitting (Oct 29)
 
-- [ ] Final example renders, including the 3-way comparison (one layout, three looks) and one 1920×1088 two-stage render
+- [ ] 121-frame (5 s) stage-1 render on the A40: does it fit in memory, how long, does quality hold? Decides the shot length for the examples
+- [ ] Final example renders: the 3-way comparison (one layout, three looks), a 3-shot sequence (**Render all shots**) and one 1920×1088 two-stage render
 - [ ] `examples/look_plaza.jpg` resolved (see above)
 - [ ] Project name decided (README says "Name TBD")
 - [ ] Demo video recorded and uploaded

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   apiUrl, aspectWarning, checkHealth, describeState, loadServer, lookForm, normalizeServer, promptWarnings, renderForm,
-  runJob, runRender, saveServer, serverCommand,
+  runJob, runRender, saveServer, serverCommand, stitchShots,
 } from '../src/render.js';
 
 test('promptWarnings flags empty prompts and layout words', () => {
@@ -139,4 +139,17 @@ test('checkHealth accepts only our server', async () => {
 test('serverCommand names the page origin unless the dev server proxies', () => {
   assert.equal(serverCommand('http://localhost:5173', { proxied: true }), 'python -m server.app');
   assert.equal(serverCommand('https://colinwww.github.io'), 'python -m server.app --cors-origin https://colinwww.github.io');
+});
+
+test('stitchShots posts the render ids and returns the sequence', async () => {
+  const calls = [];
+  const fetchFn = async (url, opts) => {
+    calls.push([url, opts.method, opts.headers['Content-Type'], JSON.parse(opts.body)]);
+    return reply({ id: 's1', status: 'succeeded', video_url: '/api/sequence/s1/video', frames: 130 }, 201);
+  };
+  const seq = await stitchShots(['a', 'b'], { server: 'http://pod:8190', clip: 'layout', fetchFn });
+  assert.equal(seq.video_url, '/api/sequence/s1/video');
+  assert.deepEqual(calls, [['http://pod:8190/api/stitch', 'POST', 'application/json', { renders: ['a', 'b'], clip: 'layout' }]]);
+  await assert.rejects(stitchShots(['a'], { fetchFn: async () => reply({ error: 'send 2 to 24 render ids' }, 400) }), /2 to 24/);
+  await assert.rejects(stitchShots(['a', 'b'], { fetchFn: async () => reply({ status: 'failed', error: 'ffmpeg could not join' }, 500) }), /ffmpeg/);
 });

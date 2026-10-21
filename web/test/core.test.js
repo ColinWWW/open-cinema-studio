@@ -59,5 +59,7 @@ test('normalizeScene survives junk and keeps valid data', () => {
   assert.ok(junk.camera.keys.length >= 1);
   assert.equal(junk.output.width, 960);
   const plaza = plazaScene();
-  assert.deepEqual(normalizeScene(JSON.parse(JSON.stringify(plaza))), plaza);
+  const { shots, shot, ...back } = normalizeScene(JSON.parse(JSON.stringify(plaza)));
+  assert.deepEqual(back, plaza);
+  assert.equal(shots.length, 1);
 });
