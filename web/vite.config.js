@@ -2,8 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import { DEMO_FILES } from './src/demo.js';
 
 const EXPORT_DIR = fileURLToPath(new URL('./exports/', import.meta.url));
+const EXAMPLES_DIR = fileURLToPath(new URL('../examples/', import.meta.url));
 // The render server (server/app.py). Proxied so the page and the API share an origin.
 const RENDER_SERVER = process.env.RENDER_SERVER || 'http://127.0.0.1:8190';
 
@@ -36,8 +38,33 @@ function savePlayblast() {
   };
 }
 
+// The Render panel's demo mode plays the plaza example from examples/. Serve those files at
+// <base>demo/ in dev and copy them into the build, so they live in git only once.
+function demoFiles() {
+  const names = new Set(Object.values(DEMO_FILES));
+  return {
+    name: 'demo-files',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const prefix = `${server.config.base}demo/`;
+        const name = req.url.startsWith(prefix) && decodeURIComponent(req.url.slice(prefix.length).split('?')[0]);
+        if (!names.has(name)) return next();
+        res.setHeader('Content-Type', name.endsWith('.mp4') ? 'video/mp4' : 'image/png');
+        fs.createReadStream(path.join(EXAMPLES_DIR, name)).pipe(res);
+      });
+    },
+    generateBundle() {
+      for (const name of names) {
+        this.emitFile({ type: 'asset', fileName: `demo/${name}`, source: fs.readFileSync(path.join(EXAMPLES_DIR, name)) });
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [savePlayblast()],
+  // GitHub Pages serves the build under /<repo>/ (pages.yml sets BASE_PATH=/open-cinema-studio/)
+  base: process.env.BASE_PATH || '/',
+  plugins: [savePlayblast(), demoFiles()],
   server: {
     port: 5173,
     strictPort: true,

@@ -14,6 +14,9 @@ Routes (the Vite dev server proxies /api/render, /api/look and /api/health here)
     GET  /api/look/{id}           same status fields as a render
     GET  /api/look/{id}/image     the finished PNG, at width x height
 
+A page served from another origin (e.g. GitHub Pages) can call the server when it's started with
+--cors-origin https://colinwww.github.io: CORS headers (and preflight answers) go to that origin only.
+
 Jobs (renders and looks) run one at a time (one GPU), in submission order. Files go to server/renders/<id>/.
 """
 
@@ -23,6 +26,7 @@ import os
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from aiohttp import web
 from comfy_sdk import AsyncComfy, ComfyError
@@ -197,8 +201,48 @@ async def result(request):
     return web.FileResponse(svc.result_path(rid), headers={"Content-Type": mime})
 
 
-def make_app(client, renders_dir=RENDERS):
-    app = web.Application(client_max_size=MAX_UPLOAD)
+def check_origin(origin):
+    """`https://host[:port]` -> itself (minus a trailing slash); anything that isn't a bare origin raises."""
+    origin = origin.strip().rstrip("/")
+    parts = urlsplit(origin)
+    if parts.scheme not in ("http", "https") or not parts.netloc or parts.path or parts.query or parts.fragment:
+        raise ValueError(f"--cors-origin must look like https://example.github.io, got {origin!r}")
+    return origin
+
+
+def cors_middleware(origin):
+    """Let pages from `origin` (one origin, no wildcard) call the API, including preflight requests."""
+
+    @web.middleware
+    async def cors(request, handler):
+        if request.headers.get("Origin") != origin:
+            resp = await handler(request)
+            resp.headers.setdefault("Vary", "Origin")
+            return resp
+        if request.method == "OPTIONS" and "Access-Control-Request-Method" in request.headers:
+            resp = web.Response(status=204, headers={
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": request.headers.get("Access-Control-Request-Headers", ""),
+                "Access-Control-Max-Age": "600",
+            })
+            # Chrome asks before a public page (GitHub Pages) may call a server on localhost / the LAN
+            if request.headers.get("Access-Control-Request-Private-Network") == "true":
+                resp.headers["Access-Control-Allow-Private-Network"] = "true"
+        else:
+            try:
+                resp = await handler(request)
+            except web.HTTPException as e:  # 404/405 from the router: still readable by the page
+                e.headers.update({"Access-Control-Allow-Origin": origin, "Vary": "Origin"})
+                raise
+        resp.headers.update({"Access-Control-Allow-Origin": origin, "Vary": "Origin"})
+        return resp
+
+    return cors
+
+
+def make_app(client, renders_dir=RENDERS, cors_origin=None):
+    middlewares = [cors_middleware(check_origin(cors_origin))] if cors_origin else []
+    app = web.Application(client_max_size=MAX_UPLOAD, middlewares=middlewares)
     app[SERVICE] = RenderService(client, renders_dir)
     app.add_routes([
         web.get("/api/health", health),
@@ -214,19 +258,27 @@ def make_app(client, renders_dir=RENDERS):
 def main():
     ap = argparse.ArgumentParser(description="Open Cinema Studio render server (Comfy SDK)")
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8190)))
+    ap.add_argument("--host", default="127.0.0.1", help="interface to listen on (0.0.0.0 on a pod)")
     ap.add_argument("--comfy-url", help="sets COMFY_BASE_URL (default: Comfy Cloud, or the env var)")
+    ap.add_argument("--cors-origin", help="let a page on this origin call the server, e.g. https://colinwww.github.io")
     args = ap.parse_args()
+    if args.cors_origin:
+        try:
+            args.cors_origin = check_origin(args.cors_origin)
+        except ValueError as e:
+            ap.error(str(e))
     if args.comfy_url:
         os.environ["COMFY_BASE_URL"] = args.comfy_url
 
     async def app_factory():
         client = tolerate_head_rewrites(AsyncComfy(timeout=120.0))
-        app = make_app(client)
+        app = make_app(client, cors_origin=args.cors_origin)
         app.on_cleanup.append(lambda _: client.aclose())
-        print(f"render server on http://127.0.0.1:{args.port} -> {client!r}")
+        cors = f" (CORS: {args.cors_origin})" if args.cors_origin else ""
+        print(f"render server on http://{args.host}:{args.port} -> {client!r}{cors}")
         return app
 
-    web.run_app(app_factory(), host="127.0.0.1", port=args.port, print=None)
+    web.run_app(app_factory(), host=args.host, port=args.port, print=None)
 
 
 if __name__ == "__main__":

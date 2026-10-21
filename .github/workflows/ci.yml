@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            server/requirements.txt
+      - run: pip install -r server/requirements.txt -r requirements.txt pytest
+      - name: Server tests (the end-to-end ones start the mock ComfyUI and comfy-api-proxy)
+        run: python -m unittest discover -s server/tests -t . -v
+      - name: Script tests
+        run: python -m pytest -q tests
+      - name: Open-weights check
+        run: python scripts/check_open_weights.py workflows/*.json
+      - name: Committed workflows match server/workflow.py
+        run: |
+          python -m server.workflow
+          if [ -n "$(git status --porcelain -- workflows/)" ]; then
+            git diff -- workflows/
+            echo "::error::workflows/*.json is stale: run python -m server.workflow and commit"
+            exit 1
+          fi
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

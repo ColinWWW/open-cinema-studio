@@ -1,6 +1,7 @@
 // Render panel: send the playblast + a look still + a prompt to the render server (server/app.py,
 // which runs our core-node LTX-2.5 workflow through the Comfy SDK) and show the result next to the
-// playblast. The dev server proxies /api/render and /api/health to it.
+// playblast. The dev server proxies /api/render, /api/look and /api/health to it; a page served from
+// elsewhere (GitHub Pages) calls the server at the URL set in the panel (server started with --cors-origin).
 
 const BANNED = ['clay', '3d', 'unreal']; // the model card: describe the finished shot, not the layout
 
@@ -47,6 +48,43 @@ export function lookForm({ depth, prompt, output, seed, strength }) {
   return form;
 }
 
+const SERVER_KEY = 'ocs.renderServer';
+
+/** Clean up a typed server URL: '' = same origin; adds http:// if missing; drops trailing slashes. Throws if invalid. */
+export function normalizeServer(input) {
+  let s = (input || '').trim();
+  if (!s) return '';
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = `http://${s}`;
+  const u = new URL(s);
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error(`Not an http(s) URL: ${input}`);
+  if (u.search || u.hash) throw new Error('Leave out ?query and #fragment');
+  return `${u.origin}${u.pathname}`.replace(/\/+$/, '');
+}
+
+/** URL for an API path ('/api/...', as the server returns them) on the render server ('' = same origin). */
+export function apiUrl(server, path) {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${server || ''}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
+/** The saved render server URL ('' when unset or storage is blocked). */
+export function loadServer(storage = globalThis.localStorage) {
+  try {
+    return normalizeServer(storage?.getItem(SERVER_KEY) || '');
+  } catch {
+    return '';
+  }
+}
+
+export function saveServer(server, storage = globalThis.localStorage) {
+  try {
+    if (server) storage.setItem(SERVER_KEY, server);
+    else storage.removeItem(SERVER_KEY);
+  } catch {
+    // private mode / blocked storage: the URL just isn't remembered
+  }
+}
+
 async function json(res) {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `${res.status} ${res.statusText}`);
@@ -54,13 +92,13 @@ async function json(res) {
 }
 
 /** Submit a job ('render' or 'look') and poll until it ends. Resolves with the final state; throws on failure. */
-export async function runJob(kind, form, { fetchFn = fetch, onUpdate, pollMs = 1000, sleep } = {}) {
+export async function runJob(kind, form, { server = '', fetchFn = fetch, onUpdate, pollMs = 1000, sleep } = {}) {
   const wait = sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-  let state = await json(await fetchFn(`/api/${kind}`, { method: 'POST', body: form }));
+  let state = await json(await fetchFn(apiUrl(server, `/api/${kind}`), { method: 'POST', body: form }));
   onUpdate?.(state);
   while (state.status === 'queued' || state.status === 'running') {
     await wait(pollMs);
-    state = await json(await fetchFn(`/api/${kind}/${state.id}`));
+    state = await json(await fetchFn(apiUrl(server, `/api/${kind}/${state.id}`)));
     onUpdate?.(state);
   }
   if (state.status !== 'succeeded') throw new Error(state.error || `${kind} ${state.status}`);
@@ -68,6 +106,19 @@ export async function runJob(kind, form, { fetchFn = fetch, onUpdate, pollMs = 1
 }
 
 export const runRender = (form, opts) => runJob('render', form, opts);
+
+/** GET /api/health on the render server. Resolves with {ok, target}; throws if nothing (or not our server) answers. */
+export async function checkHealth(server, { fetchFn = fetch, timeoutMs = 5000 } = {}) {
+  const signal = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(timeoutMs) : undefined;
+  const h = await json(await fetchFn(apiUrl(server, '/api/health'), { signal }));
+  if (h.ok !== true) throw new Error('not an Open Cinema Studio render server');
+  return h;
+}
+
+/** The command that starts a render server this page can call ('proxied': the Vite dev server forwards /api). */
+export function serverCommand(pageOrigin, { proxied = false } = {}) {
+  return proxied ? 'python -m server.app' : `python -m server.app --cors-origin ${pageOrigin}`;
+}
 
 export function describeState(s) {
   const secs = s.created ? Math.round(Date.now() / 1000 - s.created) : 0;
@@ -84,12 +135,17 @@ export function describeState(s) {
  * Wire the render panel. `exportPlayblast()` returns {mp4, firstFrame, depth} for the current scene;
  * the panel re-exports only when the scene changed since the last export. The look still comes from
  * a file, or is generated from frame 0's depth map (POST /api/look) so it matches the layout box for box.
+ * When no render server answers, the panel shows the bundled plaza example instead (demo mode).
  */
-export function initRenderPanel({ getScene, exportPlayblast }) {
+export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = false }) {
   const $ = (id) => document.getElementById(id);
   const panel = $('render-panel');
+  let server = loadServer();
+  let demoMode = false;
+  let check = 0; // ignores answers from older health checks
   let look = null; // {blob, name, width, height}
   let blast = null; // {mp4, firstFrame, depth, key}
+  let rendered = null; // the last render's MP4 blob
   let busy = false;
   const urls = new Map();
   const setUrl = (el, blob) => {
@@ -101,21 +157,53 @@ export function initRenderPanel({ getScene, exportPlayblast }) {
 
   const sceneKey = () => JSON.stringify(getScene());
   const refreshHints = () => {
+    const noPrompt = !$('render-prompt').value.trim();
+    $('render-go').disabled = busy || demoMode || !look || noPrompt;
+    $('render-generate').disabled = busy || demoMode || noPrompt;
+    if (demoMode) {
+      $('render-hints').textContent = 'Connect a render server to generate look stills and render your own shot.';
+      return;
+    }
     const hints = [...promptWarnings($('render-prompt').value)];
     const aspect = aspectWarning(look, getScene().output);
     if (aspect) hints.push(aspect);
     if (look?.key && look.key !== sceneKey()) hints.push('The shot changed since this look still was generated: generate it again so it matches.');
     if (!look) hints.unshift('Add a look still: generate one from the layout, or choose frame 0 restyled with any image model.');
     $('render-hints').textContent = hints.join(' ');
-    const noPrompt = !$('render-prompt').value.trim();
-    $('render-go').disabled = busy || !look || noPrompt;
-    $('render-generate').disabled = busy || noPrompt;
   };
+
+  /** Demo mode swaps the panel's media for the bundled example; leaving it puts the user's own back. */
+  function setDemo(on) {
+    if (on === demoMode) return;
+    demoMode = on;
+    $('render-demo').hidden = !on;
+    panel.classList.toggle('demo', on);
+    if (on) {
+      $('render-demo-cmd').textContent = serverCommand(location.origin, { proxied: proxied && !server });
+      const media = [['render-frame0', 'frame0'], ['render-depth', 'depth'], ['render-look-img', 'look'],
+        ['render-blast', 'layout'], ['render-result', 'render']];
+      for (const [id, key] of media) {
+        setUrl($(id), null);
+        $(id).src = demo[key];
+      }
+      $('render-download').hidden = true;
+      $('render-play').click();
+    } else {
+      setUrl($('render-frame0'), blast?.firstFrame);
+      setUrl($('render-depth'), blast?.depth);
+      setUrl($('render-blast'), blast?.mp4);
+      setUrl($('render-look-img'), look?.blob);
+      setUrl($('render-result'), rendered);
+      $('render-download').hidden = !rendered;
+      if (rendered) $('render-download').href = urls.get($('render-result'));
+    }
+    refreshHints();
+  }
 
   // key: the scene the still was generated from (null for a chosen file)
   const setLook = (blob, name, width, height, key = null) => {
     look = { blob, name, width, height, key };
-    setUrl($('render-look-img'), blob);
+    if (!demoMode) setUrl($('render-look-img'), blob);
     refreshHints();
   };
 
@@ -152,15 +240,39 @@ export function initRenderPanel({ getScene, exportPlayblast }) {
   }
 
   async function checkServer() {
+    const mine = ++check;
+    const el = $('render-server');
+    el.textContent = 'Checking the render server…';
+    el.classList.remove('bad');
     try {
-      const h = await json(await fetch('/api/health'));
-      $('render-server').textContent = `Render server: ${h.target}`;
-      $('render-server').classList.remove('bad');
-    } catch {
-      $('render-server').textContent = 'Render server not reachable. Start it with: python -m server.app';
-      $('render-server').classList.add('bad');
+      const h = await checkHealth(server);
+      if (mine !== check) return;
+      el.textContent = `Render server: ${h.target}`;
+      setDemo(false);
+    } catch (err) {
+      if (mine !== check) return;
+      el.textContent = server ? `${server} not reachable (${err.message}).` : 'No render server on this page’s origin.';
+      el.classList.add('bad');
+      setDemo(true);
     }
   }
+
+  const connect = () => {
+    try {
+      server = normalizeServer($('render-server-url').value);
+    } catch (err) {
+      $('render-server').textContent = err.message;
+      $('render-server').classList.add('bad');
+      return;
+    }
+    $('render-server-url').value = server;
+    saveServer(server);
+    checkServer();
+  };
+
+  $('render-server-url').value = server;
+  $('render-server-url').addEventListener('change', connect);
+  $('render-connect').addEventListener('click', connect);
 
   $('render-open').addEventListener('click', () => {
     panel.hidden = false;
@@ -185,8 +297,8 @@ export function initRenderPanel({ getScene, exportPlayblast }) {
       const form = lookForm({
         depth, prompt: $('render-prompt').value, output: scene.output, seed: Number($('render-seed').value) || 42,
       });
-      const final = await runJob('look', form, { onUpdate });
-      const still = await (await fetch(final.image_url)).blob();
+      const final = await runJob('look', form, { server, onUpdate });
+      const still = await (await fetch(apiUrl(server, final.image_url))).blob();
       setLook(still, `look_${final.id}.png`, scene.output.width, scene.output.height, blast.key);
       status.textContent = `Look still ready in ${final.seconds}s. Happy with it? Render the shot, or generate again with another seed.`;
     }),
@@ -195,7 +307,7 @@ export function initRenderPanel({ getScene, exportPlayblast }) {
   $('render-play').addEventListener('click', () => {
     for (const v of [$('render-blast'), $('render-result')]) {
       v.currentTime = 0;
-      v.play();
+      v.play().catch(() => {});
     }
   });
 
@@ -208,9 +320,9 @@ export function initRenderPanel({ getScene, exportPlayblast }) {
         mp4, look: look.blob, lookName: look.name, prompt: $('render-prompt').value,
         output: scene.output, seed: Number($('render-seed').value) || 42,
       });
-      const final = await runRender(form, { onUpdate });
-      const video = await (await fetch(final.video_url)).blob();
-      setUrl($('render-result'), video);
+      const final = await runRender(form, { server, onUpdate });
+      rendered = await (await fetch(apiUrl(server, final.video_url))).blob();
+      setUrl($('render-result'), rendered);
       const a = $('render-download');
       a.href = urls.get($('render-result'));
       a.download = `${(scene.name || 'shot').replace(/[^\w.-]+/g, '_')}_render_${final.id}.mp4`;
