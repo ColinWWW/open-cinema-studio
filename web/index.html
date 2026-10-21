@@ -7,116 +7,51 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <p id="small-screen" role="note">
+      This editor is best on a desktop browser, at least 900 px wide. The demo replay works here;
+      the editor needs a mouse and a wider window.
+    </p>
+
+    <!-- First in the Tab order: the demo replay opens by itself on a first visit. -->
+    <div id="replay" role="region" aria-labelledby="replay-title" hidden>
+      <div class="replay-head">
+        <strong id="replay-title"></strong>
+        <span id="replay-dots"></span>
+        <button id="replay-close" title="Close the demo">Close</button>
+      </div>
+      <p id="replay-text"></p>
+      <img id="replay-img" alt="" hidden />
+      <div id="replay-videos" class="replay-videos" hidden>
+        <figure><video id="replay-layout" muted loop playsinline></video><figcaption>Layout (blocked in the browser)</figcaption></figure>
+        <figure id="replay-render-fig" hidden><video id="replay-render" muted loop playsinline></video><figcaption>LTX-2.5 render</figcaption></figure>
+      </div>
+      <progress id="replay-progress" aria-label="Replay progress" max="1" value="0" hidden></progress>
+      <div id="replay-status" class="muted"></div>
+      <div id="replay-end" class="render-row" hidden>
+        <button id="replay-edit" class="primary">Edit the plaza</button>
+        <button id="replay-render-btn">Render your own…</button>
+        <button id="replay-again">Replay</button>
+      </div>
+    </div>
+
     <header>
       <strong class="brand">Open Cinema Studio</strong>
       <label>Scene
         <select id="preset"></select>
       </label>
       <button id="save-json" title="Download the scene as JSON">Save</button>
-      <label class="file-btn" title="Load a scene JSON">Load<input id="load-json" type="file" accept=".json,application/json" hidden /></label>
+      <label class="file-btn" title="Load a scene JSON">Load<input id="load-json" class="visually-hidden" type="file" accept=".json,application/json" /></label>
       <span class="spacer"></span>
       <label>Size <select id="resolution"></select></label>
       <label>Frames <select id="frames"></select></label>
       <span class="muted">24 fps</span>
-      <button id="replay-open" title="Replay a real render of the plaza example, step by step">▶ Demo</button>
+      <button id="replay-open" aria-label="Demo replay" title="Replay a real render of the plaza example, step by step">▶ Demo</button>
       <button id="export">Export playblast</button>
       <button id="render-open" class="primary" title="Render the shot with LTX-2.5 through ComfyUI">Render…</button>
     </header>
 
-    <main>
-      <aside id="panel">
-        <section>
-          <h2>Add</h2>
-          <div class="row">
-            <button data-add="box">Box</button>
-            <button data-add="person">Person</button>
-            <button data-add="plane">Wall</button>
-          </div>
-        </section>
-
-        <section>
-          <h2>Edit <span class="muted" id="sel-label">nothing selected</span></h2>
-          <div class="row">
-            <button data-mode="translate" class="active" title="W">Move</button>
-            <button data-mode="rotate" title="E">Rotate</button>
-            <button data-mode="scale" title="R">Scale</button>
-          </div>
-          <div class="row">
-            <button id="duplicate" title="Ctrl+D">Duplicate</button>
-            <button id="delete" title="Delete">Delete</button>
-          </div>
-          <div id="inspector" hidden>
-            <label class="wide">Name <input id="obj-name" type="text" /></label>
-            <div class="xyz"><span>Position</span><input data-field="position" data-i="0" type="number" step="0.1" /><input data-field="position" data-i="1" type="number" step="0.1" /><input data-field="position" data-i="2" type="number" step="0.1" /></div>
-            <div class="xyz"><span>Size</span><input data-field="scale" data-i="0" type="number" step="0.1" min="0.01" /><input data-field="scale" data-i="1" type="number" step="0.1" min="0.01" /><input data-field="scale" data-i="2" type="number" step="0.1" min="0.01" /></div>
-            <label class="wide">Turn (°) <input id="obj-roty" type="number" step="5" /></label>
-            <label class="wide">Grey <input id="obj-grey" type="range" min="0.3" max="1" step="0.01" /></label>
-          </div>
-        </section>
-
-        <section>
-          <h2>Shots <span class="muted">cut together in this order</span></h2>
-          <div class="row shot-row">
-            <select id="shot" title="Each shot is its own camera over the same blocking"></select>
-            <button id="shot-add" title="New shot after this one (starts as a copy of its camera)">+ Shot</button>
-          </div>
-          <div class="row shot-row">
-            <input id="shot-name" type="text" spellcheck="false" title="Shot name" />
-            <button id="shot-up" title="Earlier in the cut">↑</button>
-            <button id="shot-down" title="Later in the cut">↓</button>
-            <button id="shot-del" title="Delete this shot">✕</button>
-          </div>
-        </section>
-
-        <section>
-          <h2>Shot camera</h2>
-          <button id="pilot" class="wide-btn" title="C">Look through shot camera</button>
-          <label class="wide">Lens (vertical fov °) <input id="cam-fov" type="number" min="10" max="120" step="1" /></label>
-          <label class="wide">Lens shift <input id="cam-shift" type="number" min="-1" max="1" step="0.01" title="Moves the horizon down (positive) or up (negative) without tilting" /></label>
-          <label class="wide">Easing
-            <select id="cam-ease"><option value="smooth">Smooth</option><option value="linear">Linear</option></select>
-          </label>
-          <div class="row move-row">
-            <select id="cam-move" title="Replaces the camera keys with this move, starting from the frame-0 framing"></select>
-            <button id="cam-move-apply">Apply move</button>
-          </div>
-          <p class="hint">Turn on <em>Look through shot camera</em>, frame the shot with the mouse, then press <kbd>K</kbd> to key it at the current frame.</p>
-        </section>
-
-        <section class="hint">
-          <h2>Keys</h2>
-          <p><kbd>W</kbd>/<kbd>E</kbd>/<kbd>R</kbd> move/rotate/scale · <kbd>Del</kbd> delete · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate · <kbd>C</kbd> shot camera · <kbd>K</kbd> key camera · <kbd>Space</kbd> play · <kbd>,</kbd>/<kbd>.</kbd> step</p>
-          <p>Left-drag orbit · right-drag pan · wheel zoom</p>
-        </section>
-      </aside>
-
-      <div id="viewport">
-        <canvas id="view"></canvas>
-        <div id="hud"></div>
-      </div>
-    </main>
-
-    <footer id="timeline">
-      <button id="play" title="Space">▶</button>
-      <button id="prev-key" title="Previous camera key">⏮</button>
-      <button id="set-key" title="K: key the shot camera here">◆ Key</button>
-      <button id="del-key" title="Delete the camera key at this frame">✕ Key</button>
-      <button id="next-key" title="Next camera key">⏭</button>
-      <div id="scrub">
-        <div id="key-marks"></div>
-        <input id="frame" type="range" min="0" max="64" value="0" />
-      </div>
-      <span id="frame-label">0 / 64</span>
-    </footer>
-
-    <div id="export-panel" hidden>
-      <div id="export-status"></div>
-      <progress id="export-progress" max="1" value="0"></progress>
-      <div id="export-links"></div>
-      <button id="export-close">Close</button>
-    </div>
-
-    <div id="render-panel" hidden>
+    <!-- The Render and export panels float, but sit right after the header so Tab reaches them straight after their buttons. -->
+    <div id="render-panel" role="region" aria-label="Render" hidden>
       <div class="render-head">
         <strong>Render</strong>
         <span id="render-server" class="muted"></span>
@@ -144,13 +79,13 @@
           <div class="render-row">
             <button id="render-generate" title="Make the look still from frame 0's depth and the prompt (Z-Image-Turbo + depth ControlNet), so it matches the layout box for box" disabled>Generate look still</button>
             <button id="render-variants-go" title="Generate three look stills with the next three seeds, then click the one you like" disabled>3 variants</button>
-            <label class="file-btn">Choose look still…<input id="render-look" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label>
+            <label class="file-btn">Choose look still…<input id="render-look" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" /></label>
           </div>
         </div>
         <div class="render-text">
           <div class="render-row prompt-head">
             <label for="render-prompt">Prompt</label>
-            <select id="render-ideas" title="Fill in a starter prompt"><option value="">Prompt ideas…</option></select>
+            <select id="render-ideas" aria-label="Prompt ideas" title="Fill in a starter prompt"><option value="">Prompt ideas…</option></select>
           </div>
           <textarea id="render-prompt" rows="4" placeholder="One or two sentences describing the finished shot (used for the look still and the render)."></textarea>
           <div class="render-row">
@@ -164,7 +99,7 @@
       <div id="render-variants" class="variants" hidden></div>
       <div id="render-status" class="muted">Exports the playblast if the scene changed, then renders stage 1 (about 3 minutes on an A40).</div>
       <div class="render-row">
-        <progress id="render-progress" max="1" value="0"></progress>
+        <progress id="render-progress" aria-label="Render progress" max="1" value="0"></progress>
         <button id="render-cancel" title="Stop the job running on the GPU" hidden>Cancel</button>
       </div>
       <div class="render-videos">
@@ -178,6 +113,99 @@
       </div>
     </div>
 
+    <div id="export-panel" hidden>
+      <div id="export-status"></div>
+      <progress id="export-progress" aria-label="Export progress" max="1" value="0"></progress>
+      <div id="export-links"></div>
+      <button id="export-close">Close</button>
+    </div>
+
+    <main>
+      <aside id="panel">
+        <section>
+          <h2>Add</h2>
+          <div class="row">
+            <button data-add="box">Box</button>
+            <button data-add="person">Person</button>
+            <button data-add="plane">Wall</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Edit <span class="muted" id="sel-label">nothing selected</span></h2>
+          <div class="row">
+            <button data-mode="translate" class="active" title="W">Move</button>
+            <button data-mode="rotate" title="E">Rotate</button>
+            <button data-mode="scale" title="R">Scale</button>
+          </div>
+          <div class="row">
+            <button id="duplicate" title="Ctrl+D">Duplicate</button>
+            <button id="delete" title="Delete">Delete</button>
+          </div>
+          <div id="inspector" hidden>
+            <label class="wide">Name <input id="obj-name" type="text" /></label>
+            <div class="xyz"><span>Position</span><input data-field="position" data-i="0" type="number" step="0.1" aria-label="Position X" /><input data-field="position" data-i="1" type="number" step="0.1" aria-label="Position Y" /><input data-field="position" data-i="2" type="number" step="0.1" aria-label="Position Z" /></div>
+            <div class="xyz"><span>Size</span><input data-field="scale" data-i="0" type="number" step="0.1" min="0.01" aria-label="Size X" /><input data-field="scale" data-i="1" type="number" step="0.1" min="0.01" aria-label="Size Y" /><input data-field="scale" data-i="2" type="number" step="0.1" min="0.01" aria-label="Size Z" /></div>
+            <label class="wide">Turn (°) <input id="obj-roty" type="number" step="5" /></label>
+            <label class="wide">Grey <input id="obj-grey" type="range" min="0.3" max="1" step="0.01" /></label>
+          </div>
+        </section>
+
+        <section>
+          <h2>Shots <span class="muted">cut together in this order</span></h2>
+          <div class="row shot-row">
+            <select id="shot" aria-label="Shot" title="Each shot is its own camera over the same blocking"></select>
+            <button id="shot-add" title="New shot after this one (starts as a copy of its camera)">+ Shot</button>
+          </div>
+          <div class="row shot-row">
+            <input id="shot-name" type="text" spellcheck="false" title="Shot name" aria-label="Shot name" />
+            <button id="shot-up" title="Earlier in the cut" aria-label="Move shot earlier">↑</button>
+            <button id="shot-down" title="Later in the cut" aria-label="Move shot later">↓</button>
+            <button id="shot-del" title="Delete this shot" aria-label="Delete shot">✕</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Shot camera</h2>
+          <button id="pilot" class="wide-btn" title="C">Look through shot camera</button>
+          <label class="wide">Lens (vertical fov °) <input id="cam-fov" type="number" min="10" max="120" step="1" /></label>
+          <label class="wide">Lens shift <input id="cam-shift" type="number" min="-1" max="1" step="0.01" title="Moves the horizon down (positive) or up (negative) without tilting" /></label>
+          <label class="wide">Easing
+            <select id="cam-ease"><option value="smooth">Smooth</option><option value="linear">Linear</option></select>
+          </label>
+          <div class="row move-row">
+            <select id="cam-move" aria-label="Camera move" title="Replaces the camera keys with this move, starting from the frame-0 framing"></select>
+            <button id="cam-move-apply">Apply move</button>
+          </div>
+          <p class="hint">Turn on <em>Look through shot camera</em>, frame the shot with the mouse, then press <kbd>K</kbd> to key it at the current frame.</p>
+        </section>
+
+        <section class="hint">
+          <h2>Keys</h2>
+          <p><kbd>W</kbd>/<kbd>E</kbd>/<kbd>R</kbd> move/rotate/scale · <kbd>Del</kbd> delete · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate · <kbd>C</kbd> shot camera · <kbd>K</kbd> key camera · <kbd>Space</kbd> play · <kbd>,</kbd>/<kbd>.</kbd> step</p>
+          <p>Left-drag orbit · right-drag pan · wheel zoom</p>
+        </section>
+      </aside>
+
+      <div id="viewport">
+        <canvas id="view" aria-label="3D view of the scene: drag to orbit, right-drag to pan, wheel to zoom"></canvas>
+        <div id="hud"></div>
+      </div>
+    </main>
+
+    <footer id="timeline" aria-label="Timeline">
+      <button id="play" title="Space" aria-label="Play or pause">▶</button>
+      <button id="prev-key" title="Previous camera key" aria-label="Previous camera key">⏮</button>
+      <button id="set-key" title="K: key the shot camera here" aria-label="Key the shot camera here">◆ Key</button>
+      <button id="del-key" title="Delete the camera key at this frame" aria-label="Delete the camera key at this frame">✕ Key</button>
+      <button id="next-key" title="Next camera key" aria-label="Next camera key">⏭</button>
+      <div id="scrub">
+        <div id="key-marks"></div>
+        <input id="frame" aria-label="Frame" type="range" min="0" max="64" value="0" />
+      </div>
+      <span id="frame-label">0 / 64</span>
+    </footer>
+
     <div id="dialog" hidden>
       <div id="dialog-box" role="alertdialog" aria-modal="true" aria-labelledby="dialog-message">
         <p id="dialog-message"></p>
@@ -185,27 +213,6 @@
           <button id="dialog-cancel">Cancel</button>
           <button id="dialog-ok" class="primary">OK</button>
         </div>
-      </div>
-    </div>
-
-    <div id="replay" hidden>
-      <div class="replay-head">
-        <strong id="replay-title"></strong>
-        <span id="replay-dots"></span>
-        <button id="replay-close" title="Close the demo">Close</button>
-      </div>
-      <p id="replay-text"></p>
-      <img id="replay-img" alt="" hidden />
-      <div id="replay-videos" class="replay-videos" hidden>
-        <figure><video id="replay-layout" muted loop playsinline></video><figcaption>Layout (blocked in the browser)</figcaption></figure>
-        <figure id="replay-render-fig" hidden><video id="replay-render" muted loop playsinline></video><figcaption>LTX-2.5 render</figcaption></figure>
-      </div>
-      <progress id="replay-progress" max="1" value="0" hidden></progress>
-      <div id="replay-status" class="muted"></div>
-      <div id="replay-end" class="render-row" hidden>
-        <button id="replay-edit" class="primary">Edit the plaza</button>
-        <button id="replay-render-btn">Render your own…</button>
-        <button id="replay-again">Replay</button>
       </div>
     </div>
 
