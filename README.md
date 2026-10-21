@@ -63,10 +63,21 @@ All from the same plaza layout on an A40, stage 1 (960×576, 65 frames). Click a
 - Stage 2 at 1920×1088, 97 frames: [`two_stage_plaza_1920_a40.mp4`](examples/two_stage_plaza_1920_a40.mp4)
   (look still [`look_gen_plaza_1920_a40.png`](examples/look_gen_plaza_1920_a40.png))
 - Stage 1 at 121 frames (5 s): [`stage1_plaza_121f_a40.mp4`](examples/stage1_plaza_121f_a40.mp4)
+- The same three looks at full size (1920×1088, 97 frames, stage 1 + stage 2, about 7 minutes each):
+  [day](examples/two_stage_day_plaza_1920_a40.mp4), [night](examples/two_stage_night_plaza_1920_a40.mp4),
+  [snow](examples/two_stage_snow_plaza_1920_a40.mp4)
+- The demo video's scene: the plaza with an added box and person, Orbit right
+  ([`demo_scene.json`](examples/demo_scene.json), load it with **Load**), its layout
+  [`layout_demo_scene.mp4`](examples/layout_demo_scene.mp4), look still
+  [`look_demo_scene_a40.png`](examples/look_demo_scene_a40.png) and render
+  [`stage1_demo_scene_a40.mp4`](examples/stage1_demo_scene_a40.mp4)
 
 A look still that names something the layout doesn't have (a clock tower where the layout has sky) puts it
-there anyway, and the render follows the still rather than the layout. If a still drifts, change the seed
-or describe what the boxes are.
+there anyway, and the render follows the still rather than the layout. The same goes for leaving the sky
+out: "a glass office tower" alone fills the whole background with glass. Lowering the depth strength
+doesn't fix it (by 0.7 the boxes start to drift); describing the shot does. Name the sky where the layout
+has sky, and say where the big shapes are ("a tower on the left"). Every **Prompt ideas** entry was
+checked that way on an A40 with three seeds. If a still drifts, change the seed or describe what the boxes are.
 
 ## How it works
 

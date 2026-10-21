@@ -16,7 +16,11 @@ live page (Chrome, 1920×1080), voice-over or captions. Times are targets.
 
 ## To record beforehand
 
-- The 3-way comparison (three prompts on one layout): needs GPU time, see PLAN §7
-- A 3-shot plaza sequence with **Render all shots** (about 10 minutes on an A40 at 65 frames a shot)
-- A clean render of a scene blocked on camera (the 0:08 shot), so the render at 1:00 is of that scene
+- ✅ The 3-way comparison: `examples/three_looks_plaza.mp4` (960×576), and full size as
+  `examples/two_stage_{day,night,snow}_plaza_1920_a40.mp4` (Oct 21)
+- ✅ A plaza sequence with **Render all shots**: `examples/sequence_plaza_4shots_a40.mp4` and its layout cut (Oct 21)
+- ✅ A render of the scene blocked on camera (the 0:08 shot: plaza + a box and a person, Orbit right), so the
+  render at 1:00 is of that scene: `examples/stage1_demo_scene_a40.mp4`, from `examples/demo_scene.json` and
+  `examples/look_demo_scene_a40.png` (Oct 21). Its prompt names the person ("a woman in a red coat standing by
+  stacked wooden crates"); without that, the stand-in renders as a post.
 - Keep the real render waits out of the video: cut from "Render shot" to the result, and say how long it took (~3 min on an A40)

@@ -23,8 +23,8 @@ DEPTH = EX / "layout_plaza_dolly_in_depth.png"
 
 # The plaza prompts from web/src/prompts.js (Render panel > Prompt ideas), so the app can reproduce them.
 LOOKS = {
-    "day": "A sunny stone plaza with a glass office tower, an iron lamp post, stacked wooden crates and a white market kiosk, slow push-in.",
-    "night": "A rainy night plaza lit by a single street lamp, wet cobblestones reflecting neon from a closed kiosk, crates stacked in the shadows, slow push-in.",
+    "day": "A sunny stone plaza under a clear blue sky, a glass office tower on the left, an iron lamp post, stacked wooden crates and a white market kiosk, slow push-in.",
+    "night": "A rainy night plaza, a dark office tower on the left, a single street lamp, crates stacked in the middle and a closed kiosk glowing with neon on the right, wet cobblestones, slow push-in.",
     "snow": "A snowy winter square at dusk with a tall brick building, a glowing lamp post, crates dusted with snow and a wooden market stall, gentle camera push.",
 }
 
