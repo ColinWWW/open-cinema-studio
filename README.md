@@ -8,7 +8,8 @@ Open-weights only: **LTX-2.5 + the Layout-to-Render IC-LoRA** for the clip and *
 ControlNet** for the art-direction frame, running in ComfyUI.
 
 Entry for the [Comfy Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield)
-(Open Weights Only + VFX Workflow Built with LTX). Name TBD.
+(Open Weights Only + VFX Workflow Built with LTX). Name TBD. Submission checklist and demo shot list:
+[docs/submission/](docs/submission/CHECKLIST.md).
 
 <p align="center">
   <img src="docs/media/hero.gif" width="100%" alt="Left: the grey plaza layout, blocked in the browser, with a slow dolly-in. Right: the LTX-2.5 render of it on an A40, following the same camera move box for box.">
