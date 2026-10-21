@@ -41,6 +41,7 @@ of Oct 29 through the [form](https://form.typeform.com/to/V1dSQrkS). Rules and D
 - [ ] Demo video recorded and uploaded
 - [ ] Repo public → Pages enabled → *Deploy to GitHub Pages* run → live link checked in Chrome
 - [ ] README: drop "(goes live on submission night)"
+- [ ] Run `python scripts/preflight.py`
 - [ ] CI green on `main`
 - [ ] Social post with the video and **#OpenSourceHiggsfield**
 - [ ] Form submitted; confirmation saved
