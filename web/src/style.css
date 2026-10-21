@@ -33,6 +33,11 @@ header select { max-width: 150px; }
   header label select { font-size: 13px; color: var(--text); }
 }
 .spacer { flex: 1; }
+/* ↶ ↷: one pair of buttons, joined. */
+.undo-redo { display: inline-flex; }
+.undo-redo button { padding: 4px 8px; line-height: 1; font-size: 15px; }
+.undo-redo button:first-child { border-radius: 6px 0 0 6px; }
+.undo-redo button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
 .muted { color: var(--muted); font-weight: normal; }
 
 button, select, input, .file-btn {
