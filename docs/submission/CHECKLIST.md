@@ -41,7 +41,7 @@ of Oct 29 through the [form](https://form.typeform.com/to/V1dSQrkS). Rules and D
 - [x] Live page: **Share link**, link preview card and favicon (`scripts/make_card.py`), and rendering with your own Comfy key (`docs/LIVE_RENDER.md`)
 - [x] Preflight script: `python scripts/preflight.py --before-rename` has no ❌ (Oct 21)
 - [x] Form answers and social posts in [WRITEUP.md](WRITEUP.md) lead with moving stand-ins and the new examples (Oct 21)
-- [ ] Re-render the 4-shot sequence with the new day prompt (GPU)
+- [x] Re-render the 4-shot sequence with the new day prompt (H100, Oct 21: `examples/sequence_plaza_4shots_h100.mp4`)
 - [ ] Note where `examples/look_plaza.jpg` came from in the licence audit
 - [ ] Project name decided (README says "Name TBD"): shortlist and pick in [NAMES.md](NAMES.md)
 - [ ] Form text from [WRITEUP.md](WRITEUP.md), with the name and links filled in

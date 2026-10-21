@@ -22,8 +22,8 @@ live page (Chrome, 1920×1080), voice-over or captions. Times are targets.
 - ✅ A walking stand-in: `examples/layout_plaza_walk_orbit.mp4` and its render `examples/stage1_walk_orbit_a40.mp4`,
   from `examples/walk_scene.json` (Oct 21)
 - ✅ The four moves grid: `examples/four_moves.mp4` (Oct 21)
-- A plaza sequence with **Render all shots** (`examples/sequence_plaza_4shots_a40.mp4`) is out of the cut for now: it
-  still has the old glass-wall look
+- ✅ A plaza sequence with the day look (`examples/sequence_plaza_4shots_h100.mp4`, Oct 21). It is out of the cut
+  for time (the four-moves grid took its slot); swap it back in at 1:19 in `assemble.py` if you'd rather show it
 - ✅ A render of the scene blocked on camera (the 0:08 shot: plaza + a box and a person, Orbit right), so the
   render at 1:07 is of that scene: `examples/stage1_demo_scene_a40.mp4`, from `examples/demo_scene.json` and
   `examples/look_demo_scene_a40.png` (Oct 21). Its prompt names the person ("a woman in a red coat standing by
