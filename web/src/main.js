@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-import { poseAt, removeKey, rescaleKeys, setKey, sortKeys } from './cameraPath.js';
+import { MOVES, cameraMove, poseAt, removeKey, rescaleKeys, setKey, sortKeys } from './cameraPath.js';
 import { ClayWorld, ShiftCamera, createRenderer } from './clay.js';
 import { canExport, exportPlayblast } from './exporter.js';
 import { PRESETS, newId, normalizeScene } from './presets.js';
@@ -193,6 +193,20 @@ function keyCamera() {
   refreshCameraPath();
   refreshTimeline();
   flash(`Keyed shot camera at frame ${frame}${pilot ? '' : ' (from the work view)'}`);
+  save();
+}
+
+/** Replace the camera keys with a one-click move that starts from the frame-0 framing. */
+function applyMove(move) {
+  if (scene.camera.keys.length > 2 && !confirm('Replace your camera keys with this move? (It starts from the frame-0 framing.)')) return;
+  const { keys, ease } = cameraMove(move, poseAt(scene.camera.keys, 0, scene.camera.ease), scene.output.frames);
+  scene.camera.keys = keys;
+  scene.camera.ease = ease;
+  setFrame(0);
+  refreshCameraFields();
+  refreshCameraPath();
+  refreshTimeline();
+  flash(`${MOVES[move]}: press Space to play it`);
   save();
 }
 
@@ -498,6 +512,8 @@ $('obj-grey').addEventListener('input', (e) => {
 });
 
 $('pilot').addEventListener('click', () => setPilot(!pilot));
+for (const [key, label] of Object.entries(MOVES)) $('cam-move').add(new Option(label, key));
+$('cam-move-apply').addEventListener('click', () => applyMove($('cam-move').value));
 $('cam-fov').addEventListener('input', (e) => {
   const v = parseFloat(e.target.value);
   if (Number.isFinite(v) && v >= 10 && v <= 120) scene.camera.fov = v;

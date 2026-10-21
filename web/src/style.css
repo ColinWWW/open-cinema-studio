@@ -41,6 +41,8 @@ main { display: grid; grid-template-columns: 290px 1fr; min-height: 0; }
 #panel h2 .muted { text-transform: none; letter-spacing: 0; margin-left: 6px; }
 .row { display: flex; gap: 6px; margin-bottom: 6px; }
 .row button { flex: 1; }
+.move-row { margin-top: 6px; }
+.move-row select { flex: 1; min-width: 0; }
 .wide, .xyz { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 6px; margin: 6px 0; }
 .xyz { grid-template-columns: 52px repeat(3, minmax(0, 1fr)); gap: 4px; }
 .xyz input { padding: 4px 5px; }
@@ -88,16 +90,24 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
 #render-demo strong { color: var(--accent); margin-right: 4px; }
 #render-demo code { user-select: all; background: #2d3137; padding: 1px 4px; border-radius: 4px; }
 #render-demo a { color: var(--accent); }
-.render-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.render-inputs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .thumbs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 6px; }
 #render-panel figure { margin: 0; }
 #render-panel figcaption { color: var(--muted); font-size: 11px; margin-top: 2px; }
 .thumbs img { width: 100%; aspect-ratio: 5 / 3; object-fit: cover; background: #111; border-radius: 4px; display: block; }
-.render-text { display: grid; gap: 6px; align-content: start; }
+.render-text { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-content: start; }
 .render-text textarea { font: inherit; color: var(--text); background: #2d3137; border: 1px solid var(--line); border-radius: 6px; padding: 6px; resize: vertical; }
 .render-row { display: flex; align-items: center; gap: 10px; }
 .render-row label input { width: 90px; }
 #render-hints { margin: 0; font-size: 12px; }
+.prompt-head { justify-content: space-between; }
+.prompt-head select { flex: 1; min-width: 0; max-width: 70%; }
+.variants { display: flex; gap: 6px; flex-wrap: wrap; }
+.variants[hidden] { display: none; }
+.variants button { padding: 0; border: 2px solid transparent; border-radius: 4px; background: none; width: 84px; }
+.variants button.active { border-color: var(--accent); }
+.variants img { width: 100%; display: block; border-radius: 2px; }
+.variants span { display: block; font-size: 10px; color: var(--muted); }
 #render-progress { width: 100%; }
 .render-videos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .render-videos video { width: 100%; background: #111; border-radius: 4px; display: block; }
