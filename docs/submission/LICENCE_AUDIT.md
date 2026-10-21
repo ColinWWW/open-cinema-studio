@@ -45,6 +45,7 @@ All renders are of our own grey layouts, made with the models above on our A40 p
 | `look_gen_plaza_a40.png`, `stage1_genlook_plaza_*` | generated from our plaza depth map (Z-Image-Turbo + ControlNet, then LTX-2.5) | ✅ ours; used by the README, the hero GIF and the live demo |
 | `docs/media/hero.gif` | `scripts/make_hero.py` from the two above | ✅ ours |
 | `look_gen_plaza_1920_a40.png`, `two_stage_plaza_1920_a40.mp4` | generated from our plaza depth map at 1920×1088, then LTX-2.5 stage 1 + stage 2 (Oct 21) | ✅ ours |
+| `walk_scene.json`, `look_walk_plaza_a40.png`, `stage1_walk_orbit_a40.mp4`, `docs/media/walk.gif` | a moving stand-in: our plaza scene with a person keyed to walk across (Orbit right, 97 frames), blocked in our editor; its look still from our depth map, its LTX-2.5 render, and the side-by-side GIF (`make_hero.py`'s filter) (Oct 21) | ✅ ours |
 | `stage1_plaza_121f_a40.mp4` | LTX-2.5 stage 1, 121 frames, from our plaza layout and `look_gen_plaza_a40.png` (Oct 21) | ✅ ours |
 | `look_day_plaza.png`, `look_night_plaza.png`, `look_snow_plaza.png`, `stage1_{day,night,snow}_plaza_a40.mp4`, `three_looks_plaza.mp4`, `docs/media/three_looks.gif` | `scripts/three_looks.py`: three look stills generated from our plaza depth map, their LTX-2.5 renders, and the grid of them beside the layout (Oct 21) | ✅ ours |
 | `sequence_plaza_4shots_a40.mp4`, `sequence_plaza_4shots_layout.mp4` | **Render all shots** on four shots of our plaza layout (dolly in, orbit right, crane up, truck right): the cut renders and the cut layout clips (Oct 21) | ✅ ours |

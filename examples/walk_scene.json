@@ -1,0 +1,634 @@
+{
+  "version": 1,
+  "name": "plaza_dolly_in",
+  "objects": [
+    {
+      "id": "omvicn6jv7",
+      "name": "glass tower",
+      "type": "box",
+      "position": [
+        17.25,
+        0,
+        67
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        13.700000000000001,
+        34,
+        54
+      ],
+      "grey": 0.74
+    },
+    {
+      "id": "omvicn6jv8",
+      "name": "lamp post",
+      "type": "box",
+      "position": [
+        4.615,
+        0,
+        7.595
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.15000000000000036,
+        3.8,
+        0.15000000000000036
+      ],
+      "grey": 0.9
+    },
+    {
+      "id": "omvicn6jv9",
+      "name": "lamp head",
+      "type": "box",
+      "position": [
+        4.615,
+        3.8,
+        7.595
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.4900000000000002,
+        0.9400000000000004,
+        0.4900000000000002
+      ],
+      "grey": 0.88
+    },
+    {
+      "id": "omvicn6jva",
+      "name": "lamp base",
+      "type": "box",
+      "position": [
+        4.615,
+        0,
+        7.595000000000001
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.3700000000000001,
+        0.3,
+        0.3899999999999997
+      ],
+      "grey": 0.8
+    },
+    {
+      "id": "omvicn6jvb",
+      "name": "big crate",
+      "type": "box",
+      "position": [
+        0.45,
+        0,
+        6.75
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1.6800000000000002,
+        1.43,
+        1.5
+      ],
+      "grey": 0.86
+    },
+    {
+      "id": "omvicn6jvc",
+      "name": "small crate",
+      "type": "box",
+      "position": [
+        -0.81,
+        0,
+        7.1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1.02,
+        1.03,
+        1.2000000000000002
+      ],
+      "grey": 0.82
+    },
+    {
+      "id": "omvicn6jvd",
+      "name": "kiosk body",
+      "type": "box",
+      "position": [
+        -3.265,
+        0,
+        8.35
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        3.0300000000000002,
+        2.3,
+        1.5
+      ],
+      "grey": 0.84
+    },
+    {
+      "id": "omvicn6jve",
+      "name": "kiosk roof overhang",
+      "type": "box",
+      "position": [
+        -3.25,
+        2.3,
+        8.425
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        4.1,
+        0.30000000000000027,
+        1.9500000000000002
+      ],
+      "grey": 0.92
+    },
+    {
+      "id": "omvicn6jvf",
+      "name": "kiosk roof box",
+      "type": "box",
+      "position": [
+        -3.2750000000000004,
+        2.6,
+        8.35
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.85,
+        0.5299999999999998,
+        1.2999999999999998
+      ],
+      "grey": 0.88
+    },
+    {
+      "id": "omvicn6jvg",
+      "name": "parapet wall",
+      "type": "box",
+      "position": [
+        0,
+        0,
+        11.8
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        40,
+        0.45,
+        0.40000000000000036
+      ],
+      "grey": 0.7
+    },
+    {
+      "id": "omvicnb2si",
+      "name": "person 1",
+      "type": "person",
+      "position": [
+        -1.5,
+        0,
+        3.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "grey": 0.8,
+      "keys": [
+        {
+          "frame": 0,
+          "position": [
+            -1.5,
+            0,
+            3.5
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 96,
+          "position": [
+            3,
+            0,
+            3.5
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "id": "omvicn6jvh",
+      "name": "Shot 1",
+      "camera": {
+        "fov": 50,
+        "lensShift": 0.458,
+        "ease": "linear",
+        "keys": [
+          {
+            "frame": 0,
+            "position": [
+              0,
+              1.6,
+              0
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 8,
+            "position": [
+              -0.165,
+              1.6,
+              0.002
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 16,
+            "position": [
+              -0.62,
+              1.6,
+              0.024
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 24,
+            "position": [
+              -1.303,
+              1.6,
+              0.107
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 32,
+            "position": [
+              -2.145,
+              1.6,
+              0.293
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 40,
+            "position": [
+              -3.07,
+              1.6,
+              0.613
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 48,
+            "position": [
+              -4,
+              1.6,
+              1.072
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 56,
+            "position": [
+              -4.862,
+              1.6,
+              1.647
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 64,
+            "position": [
+              -5.602,
+              1.6,
+              2.289
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 72,
+            "position": [
+              -6.184,
+              1.6,
+              2.925
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 80,
+            "position": [
+              -6.597,
+              1.6,
+              3.475
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 88,
+            "position": [
+              -6.844,
+              1.6,
+              3.858
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          },
+          {
+            "frame": 96,
+            "position": [
+              -6.928,
+              1.6,
+              4
+            ],
+            "target": [
+              0,
+              1.6,
+              8
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "shot": 0,
+  "camera": {
+    "fov": 50,
+    "lensShift": 0.458,
+    "ease": "linear",
+    "keys": [
+      {
+        "frame": 0,
+        "position": [
+          0,
+          1.6,
+          0
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 8,
+        "position": [
+          -0.165,
+          1.6,
+          0.002
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 16,
+        "position": [
+          -0.62,
+          1.6,
+          0.024
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 24,
+        "position": [
+          -1.303,
+          1.6,
+          0.107
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 32,
+        "position": [
+          -2.145,
+          1.6,
+          0.293
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 40,
+        "position": [
+          -3.07,
+          1.6,
+          0.613
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 48,
+        "position": [
+          -4,
+          1.6,
+          1.072
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 56,
+        "position": [
+          -4.862,
+          1.6,
+          1.647
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 64,
+        "position": [
+          -5.602,
+          1.6,
+          2.289
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 72,
+        "position": [
+          -6.184,
+          1.6,
+          2.925
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 80,
+        "position": [
+          -6.597,
+          1.6,
+          3.475
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 88,
+        "position": [
+          -6.844,
+          1.6,
+          3.858
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      },
+      {
+        "frame": 96,
+        "position": [
+          -6.928,
+          1.6,
+          4
+        ],
+        "target": [
+          0,
+          1.6,
+          8
+        ]
+      }
+    ]
+  },
+  "fog": [
+    60,
+    180
+  ],
+  "output": {
+    "width": 960,
+    "height": 576,
+    "frames": 97,
+    "fps": 24
+  }
+}
