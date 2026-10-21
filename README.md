@@ -10,14 +10,16 @@ ControlNet** for the art-direction frame, running in ComfyUI.
 Entry for the [Comfy Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield)
 (Open Weights Only + VFX Workflow Built with LTX). Name TBD.
 
-> Status: early. The go/no-go render passed (stage 1 on an A40 follows the layout box for box when the
-> first frame matches it). The blocking tool (`web/`) works locally, and its **Render** button drives
-> ComfyUI through the Comfy SDK. Our core-node workflow matches the go/no-go render on an A40.
-> **Generate look still** (depth-controlled first frame) passed on an A40 too: the generated plaza still
-> fed straight into the video render keeps both the look and the layout
-> (`examples/look_gen_plaza_a40.png`, `examples/stage1_genlook_plaza_a40.mp4`, contact sheet
-> `examples/stage1_genlook_plaza_frames.png`).
-> Plan, specs and budget: [docs/PLAN.md](docs/PLAN.md).
+<p align="center">
+  <img src="docs/media/hero.gif" width="100%" alt="Left: the grey plaza layout, blocked in the browser, with a slow dolly-in. Right: the LTX-2.5 render of it on an A40, following the same camera move box for box.">
+</p>
+<p align="center"><sub>Left: the shot blocked in the browser (grey boxes + a keyed dolly-in). Right: the LTX-2.5 render, which
+follows that camera move and layout. Real A40 output, stage 1, from <code>examples/</code>.</sub></p>
+
+> Status: both pipelines pass on an A40. The look still (Z-Image-Turbo + depth ControlNet) is generated from the
+> layout's own depth, so it lines up box for box, and the stage-1 video render from it keeps both the look and the
+> layout (see [Examples](#examples)). The stage-2 1920×1088 upscale is next. Plan, specs and budget:
+> [docs/PLAN.md](docs/PLAN.md).
 
 ## Try it
 
@@ -36,6 +38,18 @@ into **Render server URL**. Chrome may ask to let the page reach devices on your
 python -m server.app --cors-origin https://colinwww.github.io     # + --comfy-url for your own ComfyUI
 ```
 
+## Examples
+
+All from the same plaza layout on an A40, stage 1 (960×576, 65 frames). Click a contact sheet for full size.
+
+| Blocked in the browser | Look still, generated from its depth | LTX-2.5 render |
+|---|---|---|
+| <img src="examples/layout_plaza_dolly_in_first.png" width="280" alt="Grey plaza layout, frame 0"> | <img src="examples/look_gen_plaza_a40.png" width="280" alt="Generated look still: a sunny plaza with a glass tower, lamp post, crates and kiosk"> | [`stage1_genlook_plaza_a40.mp4`](examples/stage1_genlook_plaza_a40.mp4) |
+
+- Layout clip, frame by frame: [contact sheet](examples/layout_plaza_dolly_in_frames.png)
+- Render from the generated look still: [contact sheet](examples/stage1_genlook_plaza_frames.png)
+- Render from a reference photo instead ([`look_plaza.jpg`](examples/look_plaza.jpg)): [contact sheet](examples/stage1_core_plaza_frames.png)
+
 ## How it works
 
 1. **Block** — place primitives and keyframe a camera in a three.js editor.
@@ -52,7 +66,8 @@ cd web && npm install && npm run dev
 ```
 
 Open http://localhost:5173, add boxes, people and walls, then turn on **Look through shot camera**,
-frame the shot and press **K** to key it on the timeline. **Export playblast** renders every frame at
+frame the shot and press **K** to key it on the timeline. Or frame frame 0 and pick a one-click move under
+**Apply move**: dolly in/out, truck, crane, orbit or locked off. **Export playblast** renders every frame at
 exactly 1/24 s steps to an H.264 MP4 (960×576 or 1920×1088, 65/97/121 frames) plus PNGs of frame 0 and
 its depth map (near = white, sky = black).
 With the dev server running, exports are also written to `web/exports/`. Scenes save as JSON;
@@ -86,7 +101,9 @@ changed), sends frame 0's depth map to our look-still workflow
 ControlNet Union in depth mode, core nodes only), and shows the still next to frame 0 and its depth.
 Because the still is generated from the layout's own depth, it lines up with the playblast box for box,
 which is what makes the video render keep both the look and the layout (a still that doesn't match
-wins over the layout). Not happy? Change the seed or the prompt and generate again. Then press
+wins over the layout). Not happy? Change the seed or the prompt and generate again, or press **3 variants** for three seeds at
+once: every still stays in a strip under the panel, so you can click back to the one you liked.
+**Prompt ideas…** fills in a starter prompt. Then press
 **Render shot**. **Choose look still…** still takes your own image instead (same framing as frame 0).
 
 Without the server:
