@@ -120,12 +120,14 @@ test('renders the shot with the picked still, and the result plays', async () =>
 });
 
 test('renders all shots and cuts them into a sequence that downloads', async ({ request }) => {
+  // The panel stays open while shots are added: Render all has to follow the shot list as it changes.
+  await expect(page.locator('#render-panel')).toBeVisible();
+  await expect(page.locator('#render-all')).toBeDisabled();
   await page.locator('#shot-add').click();
+  await expect(page.locator('#render-all')).toHaveText('Render all 2 shots');
+  await expect(page.locator('#render-all')).toBeEnabled();
   await page.locator('#shot-add').click();
   await expect.poll(() => page.evaluate(() => window.ocs.scene.shots.length)).toBe(3);
-  // The panel doesn't notice shots added while it is open (the button keeps saying "Add shots"), so open it
-  // again, which refreshes it. See the PR that added this test.
-  await page.locator('#render-open').click();
   await expect(page.locator('#render-all')).toHaveText('Render all 3 shots');
 
   const stitched = [];

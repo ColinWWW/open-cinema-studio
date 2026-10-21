@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-FILES = ["README.md", "docs/submission/WRITEUP.md", "web/index.html", "web/playwright.config.js", ".github/workflows/pages.yml"]
+FILES = ["README.md", "docs/submission/WRITEUP.md", "web/index.html", "web/playwright.config.js", ".github/workflows/pages.yml",
+         "scripts/demo/assemble.py"]
 
 spec = importlib.util.spec_from_file_location("rename", ROOT / "scripts" / "rename.py")
 rename = importlib.util.module_from_spec(spec)

@@ -4,6 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Open Cinema Studio — Blocking</title>
+    <meta name="description" content="Block a shot with grey boxes and a camera move in your browser, and get back a cinematic clip that follows that exact camera and layout. Open weights only: LTX-2.5 + Layout-to-Render, through the Comfy SDK." />
+    <meta name="theme-color" content="#1b1d21" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="48x48" />
+
+    <!-- Link previews (X, Bluesky, LinkedIn, Reddit). Absolute URLs: crawlers don't resolve relative ones.
+         The card is web/public/card.png, made by scripts/make_card.py. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Open Cinema Studio" />
+    <meta property="og:title" content="Open Cinema Studio: block a shot, render it with LTX-2.5" />
+    <meta property="og:description" content="Block a shot with grey boxes and a camera move in your browser, and get back a cinematic clip that follows that exact camera and layout. Open weights only: LTX-2.5 + Layout-to-Render, through the Comfy SDK." />
+    <meta property="og:url" content="https://colinwww.github.io/open-cinema-studio/" />
+    <meta property="og:image" content="https://colinwww.github.io/open-cinema-studio/card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A grey-box layout of a plaza next to the LTX-2.5 render that follows it." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Open Cinema Studio: block a shot, render it with LTX-2.5" />
+    <meta name="twitter:description" content="Block a shot with grey boxes and a camera move in your browser, and get back a cinematic clip that follows that exact camera and layout. Open weights only: LTX-2.5 + Layout-to-Render, through the Comfy SDK." />
+    <meta name="twitter:image" content="https://colinwww.github.io/open-cinema-studio/card.png" />
+    <meta name="twitter:image:alt" content="A grey-box layout of a plaza next to the LTX-2.5 render that follows it." />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -41,6 +62,7 @@
       </label>
       <button id="save-json" title="Download the scene as JSON">Save</button>
       <label class="file-btn" title="Load a scene JSON">Load<input id="load-json" class="visually-hidden" type="file" accept=".json,application/json" /></label>
+      <button id="share-link" title="Copy a link that opens this scene">Share link</button>
       <span class="spacer"></span>
       <label>Size <select id="resolution"></select></label>
       <label>Frames <select id="frames"></select></label>

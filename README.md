@@ -17,6 +17,32 @@ Entry for the [Comfy Open Source Higgsfield Challenge](https://comfy.org/open-so
 <p align="center"><sub>Left: the shot blocked in the browser (grey boxes + a keyed dolly-in). Right: the LTX-2.5 render, which
 follows that camera move and layout. Real A40 output, stage 1, from <code>examples/</code>.</sub></p>
 
+## 60 seconds
+
+- **What it does:** you block out a shot in the browser (grey boxes and a keyed camera path), add one prompt,
+  and get back a cinematic clip that follows that exact camera move and layout, rendered by LTX-2.5 in ComfyUI.
+- **Why it's different:** you set the camera and the layout; the model only paints. The layout clip and its
+  depth drive both the look still (Z-Image-Turbo + depth ControlNet) and the clip (LTX-2.5 + the Layout-to-Render
+  IC-LoRA), so the render lines up box for box instead of reinterpreting your shot. Open weights only.
+- **How to try it:** open the [live page](https://colinwww.github.io/open-cinema-studio/) (Chrome or Edge): it
+  replays a real A40 render on first visit, and **Render…** takes a render server URL or your own Comfy key.
+  No GPU? Run the whole chain locally against the [stand-in ComfyUI](#render-comfy-sdk).
+
+<p align="center">
+  <img src="docs/media/architecture.svg" width="100%" alt="Architecture: the browser blocks the shot in three.js and exports a WebCodecs playblast plus frame 0's depth; the render server (Comfy SDK) or the Comfy Cloud path with your own key sends them to ComfyUI, which paints the look still with Z-Image-Turbo + a depth ControlNet and films the clip with LTX-2.5 + the Layout-to-Render IC-LoRA (stage 1, then stage 2); the MP4 comes back to the page.">
+</p>
+
+**Measured on an A40:**
+
+| Step | Size | Time |
+| --- | --- | --- |
+| Look still (Z-Image-Turbo + depth ControlNet) | about 1 MP | ~11 s warm, ~46–51 s cold |
+| Stage 1 clip (LTX-2.5 + IC-LoRA) | 960×576, 65 frames | ~167 s |
+| Stage 1 clip | 960×576, 121 frames (5 s) | 257 s |
+| Stage 2 clip (x2 latent upscale + 3 refine steps) | 1920×1088, 97 frames | 373 s |
+
+Single A40 runs on Oct 21; your times will vary.
+
 > Status: both pipelines pass on an A40. The look still (Z-Image-Turbo + depth ControlNet) is generated from the
 > layout's own depth, so it lines up box for box, and the stage-1 video render from it keeps both the look and the
 > layout (see [Examples](#examples)). Stage 2 (1920×1088: an x2 latent upscale and 3 refine steps) runs on the
@@ -56,6 +82,12 @@ All from the same plaza layout on an A40, stage 1 (960×576, 65 frames). Click a
 <p align="center"><img src="docs/media/three_looks.gif" width="100%" alt="Top left: the grey plaza layout. The other three: LTX-2.5 renders of the same layout and camera move as a sunny day, a rainy night and a snowy dusk."></p>
 <p align="center"><sub>One layout, three prompts: same blocking and camera, only the look changes (<code>scripts/three_looks.py</code>).</sub></p>
 
+<p align="center"><img src="docs/media/four_moves.gif" width="100%" alt="Four LTX-2.5 renders of the same grey Blocks layout, each with its layout inset in the corner: an orbit around shipping containers on a foggy harbour, a crane up over brutalist blocks in a desert, a sideways truck past concrete blocks in a neon Tokyo parking lot at night, and a dolly into an abandoned warehouse."></p>
+<p align="center"><sub>One layout, four camera moves, four places: orbit, crane up, truck, dolly in, each 97 frames on the A40, with the
+grey layout inset (<code>scripts/four_moves.py</code>). Clips:
+<a href="examples/stage1_harbour_orbit_a40.mp4">harbour orbit</a>, <a href="examples/stage1_desert_crane_up_a40.mp4">desert crane up</a>,
+<a href="examples/stage1_tokyo_truck_a40.mp4">Tokyo truck</a>, <a href="examples/stage1_warehouse_dolly_in_a40.mp4">warehouse dolly in</a>.</sub></p>
+
 - Render from a reference photo instead ([`look_plaza.jpg`](examples/look_plaza.jpg)): [contact sheet](examples/stage1_core_plaza_frames.png)
 - A four-shot sequence from **Render all shots** (dolly in, orbit right, crane up, truck right, cut together):
   [`sequence_plaza_4shots_a40.mp4`](examples/sequence_plaza_4shots_a40.mp4), layout cut
@@ -63,10 +95,21 @@ All from the same plaza layout on an A40, stage 1 (960×576, 65 frames). Click a
 - Stage 2 at 1920×1088, 97 frames: [`two_stage_plaza_1920_a40.mp4`](examples/two_stage_plaza_1920_a40.mp4)
   (look still [`look_gen_plaza_1920_a40.png`](examples/look_gen_plaza_1920_a40.png))
 - Stage 1 at 121 frames (5 s): [`stage1_plaza_121f_a40.mp4`](examples/stage1_plaza_121f_a40.mp4)
+- The same three looks at full size (1920×1088, 97 frames, stage 1 + stage 2, about 7 minutes each):
+  [day](examples/two_stage_day_plaza_1920_a40.mp4), [night](examples/two_stage_night_plaza_1920_a40.mp4),
+  [snow](examples/two_stage_snow_plaza_1920_a40.mp4)
+- The demo video's scene: the plaza with an added box and person, Orbit right
+  ([`demo_scene.json`](examples/demo_scene.json), load it with **Load**), its layout
+  [`layout_demo_scene.mp4`](examples/layout_demo_scene.mp4), look still
+  [`look_demo_scene_a40.png`](examples/look_demo_scene_a40.png) and render
+  [`stage1_demo_scene_a40.mp4`](examples/stage1_demo_scene_a40.mp4)
 
 A look still that names something the layout doesn't have (a clock tower where the layout has sky) puts it
-there anyway, and the render follows the still rather than the layout. If a still drifts, change the seed
-or describe what the boxes are.
+there anyway, and the render follows the still rather than the layout. The same goes for leaving the sky
+out: "a glass office tower" alone fills the whole background with glass. Lowering the depth strength
+doesn't fix it (by 0.7 the boxes start to drift); describing the shot does. Name the sky where the layout
+has sky, and say where the big shapes are ("a tower on the left"). Every **Prompt ideas** entry was
+checked that way on an A40 with three seeds. If a still drifts, change the seed or describe what the boxes are.
 
 ## How it works
 

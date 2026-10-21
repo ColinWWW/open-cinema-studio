@@ -8,7 +8,8 @@ Touches the places docs/submission/NAMES.md lists: the README title and "Name TB
 `<NAME>` placeholders in docs/submission/WRITEUP.md, the page <title> and header in web/index.html, and,
 with --slug, the live-link and repo URLs, `BASE` in web/playwright.config.js and `BASE_PATH` in
 .github/workflows/pages.yml (that one already follows the repo name, so it is only rewritten if it was
-ever hard-coded). Renaming the GitHub repo itself is a Settings change, done by hand.
+ever hard-coded). Renaming the GitHub repo itself is a Settings change, done by hand, and so is
+re-making the link-preview card with the new name (TITLE in scripts/make_card.py).
 """
 
 import argparse
@@ -33,6 +34,9 @@ def name_rules(name):
         ("docs/submission/WRITEUP.md", r"(?<!`)<NAME>(?!`)", esc),
         ("web/index.html", rf"<title>{OLD_NAME}( —|</title>)", rf"<title>{esc}\1"),
         ("web/index.html", rf'(class="brand">){OLD_NAME}<', rf"\g<1>{esc}<"),
+        # link-preview tags (og:site_name, og:title, twitter:title)
+        ("web/index.html", rf'(content="){OLD_NAME}\b', rf"\g<1>{esc}"),
+        ("scripts/demo/assemble.py", rf'^TITLE = "{OLD_NAME}"$', f'TITLE = "{esc}"'),  # the video's end card
     ]
 
 
@@ -42,10 +46,13 @@ def slug_rules(slug):
         # WRITEUP gives the current Pages URL "until a rename": after one it is simply the URL
         ("docs/submission/WRITEUP.md", rf"\(https://{pages} until a rename\)", f"(https://colinwww.github.io/{slug}/)"),
         ("README.md", pages, f"colinwww.github.io/{slug}/"),
+        ("web/index.html", pages, f"colinwww.github.io/{slug}/"),  # og:url, og:image, twitter:image
         *[(f, rf"github\.com/{OWNER}/{OLD_SLUG}\b", f"github.com/{OWNER}/{slug}") for f in ("README.md", "docs/submission/WRITEUP.md", "web/index.html")],
         ("web/playwright.config.js", rf"'/{OLD_SLUG}/'", f"'/{slug}/'"),
         ("web/playwright.config.js", rf"\(under /{OLD_SLUG}/\)", f"(under /{slug}/)"),
         (".github/workflows/pages.yml", rf"(BASE_PATH:\s*)/{OLD_SLUG}/", rf"\g<1>/{slug}/"),
+        ("scripts/demo/assemble.py", rf'^LIVE_LINK = "colinwww\.github\.io/{OLD_SLUG}"$', f'LIVE_LINK = "colinwww.github.io/{slug}"'),
+        ("scripts/demo/assemble.py", rf'^REPO = "github\.com/{OWNER}/{OLD_SLUG}"$', f'REPO = "github.com/{OWNER}/{slug}"'),
     ]
 
 
@@ -107,4 +114,8 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # The diff has non-ASCII (▶, ×, —): print UTF-8 even on a Windows console whose default is cp1252.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())
