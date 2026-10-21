@@ -66,3 +66,41 @@ test('live page: the Render panel falls back to the demo without a server', asyn
   await expect(page.locator('#render-demo')).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('#render-go')).toBeDisabled();
 });
+
+test('editor: loading the Plaza preset over the default scene asks in the in-app dialog', async ({ page }) => {
+  const native = [];
+  page.on('dialog', (d) => {
+    native.push(d.message());
+    d.dismiss();
+  });
+  await page.addInitScript(() => localStorage.setItem('ocs.replaySeen', '1'));
+  await page.goto('./');
+  await expect(page.locator('#replay')).toBeHidden();
+  const sceneName = () => page.evaluate(() => window.ocs.scene.name);
+  const before = await sceneName();
+  expect(before).not.toBe('plaza_dolly_in');
+
+  const dialog = page.getByRole('alertdialog', { name: 'Replace the current scene with "Plaza (dolly in)"?' });
+  const preset = page.locator('#preset');
+
+  // Esc cancels: the scene stays and focus goes back to the preset menu.
+  await preset.focus();
+  await preset.selectOption('plaza');
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('#dialog-ok')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(preset).toBeFocused();
+  expect(await sceneName()).toBe(before);
+  await expect(preset).toHaveValue('');
+
+  // OK loads it.
+  await preset.selectOption('plaza');
+  await expect(dialog).toBeVisible();
+  if (process.env.DIALOG_SCREENSHOT) await page.screenshot({ path: process.env.DIALOG_SCREENSHOT });
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(sceneName).toBe('plaza_dolly_in');
+
+  expect(native).toEqual([]);
+});
