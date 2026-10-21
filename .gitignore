@@ -23,6 +23,9 @@ web/exports/
 # Render server outputs
 server/renders/
 
+# Demo video (scripts/demo/): recordings and the cut, not committed
+/demo/
+
 # Playwright smoke test output
 web/test-results/
 web/playwright-report/
