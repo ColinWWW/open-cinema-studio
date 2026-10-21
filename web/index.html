@@ -54,6 +54,20 @@
         </section>
 
         <section>
+          <h2>Shots <span class="muted">cut together in this order</span></h2>
+          <div class="row shot-row">
+            <select id="shot" title="Each shot is its own camera over the same blocking"></select>
+            <button id="shot-add" title="New shot after this one (starts as a copy of its camera)">+ Shot</button>
+          </div>
+          <div class="row shot-row">
+            <input id="shot-name" type="text" spellcheck="false" title="Shot name" />
+            <button id="shot-up" title="Earlier in the cut">↑</button>
+            <button id="shot-down" title="Later in the cut">↓</button>
+            <button id="shot-del" title="Delete this shot">✕</button>
+          </div>
+        </section>
+
+        <section>
           <h2>Shot camera</h2>
           <button id="pilot" class="wide-btn" title="C">Look through shot camera</button>
           <label class="wide">Lens (vertical fov °) <input id="cam-fov" type="number" min="10" max="120" step="1" /></label>
@@ -61,6 +75,10 @@
           <label class="wide">Easing
             <select id="cam-ease"><option value="smooth">Smooth</option><option value="linear">Linear</option></select>
           </label>
+          <div class="row move-row">
+            <select id="cam-move" title="Replaces the camera keys with this move, starting from the frame-0 framing"></select>
+            <button id="cam-move-apply">Apply move</button>
+          </div>
           <p class="hint">Turn on <em>Look through shot camera</em>, frame the shot with the mouse, then press <kbd>K</kbd> to key it at the current frame.</p>
         </section>
 
@@ -124,19 +142,25 @@
           </div>
           <div class="render-row">
             <button id="render-generate" title="Make the look still from frame 0's depth and the prompt (Z-Image-Turbo + depth ControlNet), so it matches the layout box for box" disabled>Generate look still</button>
+            <button id="render-variants-go" title="Generate three look stills with the next three seeds, then click the one you like" disabled>3 variants</button>
             <label class="file-btn">Choose look still…<input id="render-look" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label>
           </div>
         </div>
         <div class="render-text">
-          <label for="render-prompt">Prompt</label>
+          <div class="render-row prompt-head">
+            <label for="render-prompt">Prompt</label>
+            <select id="render-ideas" title="Fill in a starter prompt"><option value="">Prompt ideas…</option></select>
+          </div>
           <textarea id="render-prompt" rows="4" placeholder="One or two sentences describing the finished shot (used for the look still and the render)."></textarea>
           <div class="render-row">
             <label>Seed <input id="render-seed" type="number" value="42" step="1" /></label>
             <button id="render-go" class="primary" disabled>Render shot</button>
+            <button id="render-all" title="For every shot, in order: export its playblast, generate its look still (same prompt and seed), render it; then cut the renders together into one sequence" disabled>Render all shots</button>
           </div>
           <p id="render-hints" class="hint"></p>
         </div>
       </div>
+      <div id="render-variants" class="variants" hidden></div>
       <div id="render-status" class="muted">Exports the playblast if the scene changed, then renders stage 1 (about 3 minutes on an A40).</div>
       <progress id="render-progress" max="1" value="0"></progress>
       <div class="render-videos">
@@ -146,6 +170,7 @@
       <div class="render-row">
         <button id="render-play">Play both</button>
         <a id="render-download" hidden>Download render</a>
+        <a id="render-download-layout" hidden>Download layout sequence</a>
       </div>
     </div>
 

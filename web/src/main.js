@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-import { poseAt, removeKey, rescaleKeys, setKey, sortKeys } from './cameraPath.js';
+import { MOVES, cameraMove, poseAt, removeKey, setKey, sortKeys } from './cameraPath.js';
 import { ClayWorld, ShiftCamera, createRenderer } from './clay.js';
 import { canExport, exportPlayblast } from './exporter.js';
 import { PRESETS, newId, normalizeScene } from './presets.js';
 import { demoUrls } from './demo.js';
 import { initRenderPanel } from './render.js';
+import { addShot, moveShot, removeShot, rescaleShots, selectShot, shotStem } from './shots.js';
 import { FRAME_COUNTS, RESOLUTIONS } from './spec.js';
 
 const $ = (id) => document.getElementById(id);
@@ -14,7 +15,7 @@ const STORAGE_KEY = 'ocs.scene.v1';
 const FAR_TARGET = 20; // shot-camera targets further than this get pulled in when piloting, so orbiting feels like looking around
 
 // ---------- state ----------
-let scene = loadSaved() ?? PRESETS.blocks.make();
+let scene = loadSaved() ?? normalizeScene(PRESETS.blocks.make());
 let frame = 0;
 let selectedId = null;
 let pilot = false;
@@ -196,6 +197,20 @@ function keyCamera() {
   save();
 }
 
+/** Replace the camera keys with a one-click move that starts from the frame-0 framing. */
+function applyMove(move) {
+  if (scene.camera.keys.length > 2 && !confirm('Replace your camera keys with this move? (It starts from the frame-0 framing.)')) return;
+  const { keys, ease } = cameraMove(move, poseAt(scene.camera.keys, 0, scene.camera.ease), scene.output.frames);
+  scene.camera.keys = keys;
+  scene.camera.ease = ease;
+  setFrame(0);
+  refreshCameraFields();
+  refreshCameraPath();
+  refreshTimeline();
+  flash(`${MOVES[move]}: press Space to play it`);
+  save();
+}
+
 function deleteKey() {
   if (!scene.camera.keys.some((k) => k.frame === frame)) return flash('No camera key on this frame');
   if (scene.camera.keys.length === 1) return flash('The shot needs at least one camera key');
@@ -235,6 +250,7 @@ function refreshCameraPath() {
 // ---------- UI refresh ----------
 function refreshAll() {
   refreshHeader();
+  refreshShots();
   refreshInspector();
   refreshCameraFields();
   refreshCameraPath();
@@ -258,6 +274,32 @@ function refreshInspector() {
   }
   if (document.activeElement !== $('obj-roty')) $('obj-roty').value = Math.round(THREE.MathUtils.radToDeg(obj.rotation[1]));
   $('obj-grey').value = obj.grey;
+}
+
+function refreshShots() {
+  const sel = $('shot');
+  sel.innerHTML = '';
+  scene.shots.forEach((s, i) => sel.add(new Option(`${i + 1}. ${s.name}`, String(i))));
+  sel.value = String(scene.shot);
+  if (document.activeElement !== $('shot-name')) $('shot-name').value = scene.shots[scene.shot].name;
+  $('shot-del').disabled = scene.shots.length < 2;
+  $('shot-up').disabled = scene.shot === 0;
+  $('shot-down').disabled = scene.shot === scene.shots.length - 1;
+}
+
+/** Edit the shot list (fn changes scene.shots / scene.shot), then show the active shot from frame 0. */
+function changeShots(fn) {
+  fn(scene);
+  frame = 0;
+  if (pilot) enterPilotPose();
+  refreshAll();
+  save();
+}
+
+/** For the render panel: make shot i active and return its file stem. */
+function showShot(i) {
+  if (i !== scene.shot) changeShots((s) => selectShot(s, i));
+  return shotStem(scene, i);
 }
 
 function refreshCameraFields() {
@@ -427,7 +469,7 @@ $('resolution').addEventListener('change', (e) => {
 for (const n of FRAME_COUNTS) $('frames').add(new Option(`${n} (${(n / 24).toFixed(1)} s)`, String(n)));
 $('frames').addEventListener('change', (e) => {
   const n = Number(e.target.value);
-  scene.camera.keys = rescaleKeys(scene.camera.keys, scene.output.frames, n);
+  rescaleShots(scene, scene.output.frames, n);
   scene.output.frames = n;
   setFrame(Math.min(frame, n - 1));
   refreshCameraPath();
@@ -498,6 +540,23 @@ $('obj-grey').addEventListener('input', (e) => {
 });
 
 $('pilot').addEventListener('click', () => setPilot(!pilot));
+$('shot').addEventListener('change', (e) => changeShots((s) => selectShot(s, Number(e.target.value))));
+$('shot-add').addEventListener('click', () => {
+  changeShots(addShot);
+  flash(`${scene.shots[scene.shot].name}: a copy of the last shot. Reframe it, or apply a move`);
+});
+$('shot-del').addEventListener('click', () => {
+  if (confirm(`Delete "${scene.shots[scene.shot].name}"?`)) changeShots(removeShot);
+});
+$('shot-up').addEventListener('click', () => changeShots((s) => moveShot(s, s.shot, -1)));
+$('shot-down').addEventListener('click', () => changeShots((s) => moveShot(s, s.shot, 1)));
+$('shot-name').addEventListener('input', (e) => {
+  scene.shots[scene.shot].name = e.target.value.trim() || `Shot ${scene.shot + 1}`;
+  refreshShots();
+  save();
+});
+for (const [key, label] of Object.entries(MOVES)) $('cam-move').add(new Option(label, key));
+$('cam-move-apply').addEventListener('click', () => applyMove($('cam-move').value));
 $('cam-fov').addEventListener('input', (e) => {
   const v = parseFloat(e.target.value);
   if (Number.isFinite(v) && v >= 10 && v <= 120) scene.camera.fov = v;
@@ -549,7 +608,10 @@ window.addEventListener('keydown', (e) => {
 });
 
 // ---------- export ----------
-const fileStem = () => `${(scene.name || 'shot').replace(/[^\w.-]+/g, '_')}_${scene.output.width}x${scene.output.height}_${scene.output.frames}f`;
+const fileStem = () => {
+  const name = scene.shots.length > 1 ? shotStem(scene, scene.shot) : (scene.name || 'shot').replace(/[^\w.-]+/g, '_');
+  return `${name}_${scene.output.width}x${scene.output.height}_${scene.output.frames}f`;
+};
 
 async function saveToDevServer(name, blob) {
   if (!import.meta.env.DEV) return null; // only `npm run dev` has /api/save
@@ -621,6 +683,7 @@ if (!canExport()) {
 
 initRenderPanel({
   getScene: () => scene,
+  showShot,
   exportPlayblast: runExport,
   demo: demoUrls(import.meta.env.BASE_URL),
   proxied: import.meta.env.DEV, // the dev server forwards /api to the render server

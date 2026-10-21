@@ -95,10 +95,39 @@ export function plazaScene() {
 
 const vec3 = (v, fallback) => (Array.isArray(v) && v.length === 3 && v.every(Number.isFinite) ? v.map(Number) : fallback);
 
+function normalizeCamera(cam, fallback) {
+  const c = cam && typeof cam === 'object' ? cam : {};
+  const keys = (Array.isArray(c.keys) ? c.keys : [])
+    .filter((k) => k && Number.isInteger(k.frame) && vec3(k.position) && vec3(k.target))
+    .map((k) => ({ frame: k.frame, position: k.position.map(Number), target: k.target.map(Number) }));
+  return {
+    fov: Number.isFinite(c.fov) ? c.fov : fallback.fov,
+    lensShift: Number.isFinite(c.lensShift) ? c.lensShift : 0,
+    ease: c.ease === 'linear' ? 'linear' : 'smooth',
+    keys: keys.length ? keys : structuredClone(fallback.keys),
+  };
+}
+
+/**
+ * A scene holds several shots (cameras) over the same blocking. `camera` is the active shot's camera,
+ * the very same object as shots[shot].camera, so the editor and exporter only ever look at `camera`.
+ * Scenes saved before shots existed become one shot.
+ */
+function normalizeShots(data, fallback) {
+  const list = Array.isArray(data.shots) && data.shots.length ? data.shots : [{ camera: data.camera }];
+  const shots = list.map((s, i) => ({
+    id: typeof s?.id === 'string' && s.id ? s.id : newId(),
+    name: typeof s?.name === 'string' && s.name.trim() ? s.name : `Shot ${i + 1}`,
+    camera: normalizeCamera(s?.camera, fallback),
+  }));
+  const shot = Number.isInteger(data.shot) && data.shot >= 0 && data.shot < shots.length ? data.shot : 0;
+  return { shots, shot, camera: shots[shot].camera };
+}
+
 /** Fill in defaults and drop anything malformed, so a loaded or hand-edited JSON can't break the editor. */
 export function normalizeScene(data) {
   const base = emptyScene();
-  if (!data || typeof data !== 'object') return base;
+  if (!data || typeof data !== 'object') data = {};
   const types = ['box', 'person', 'plane'];
   const objects = (Array.isArray(data.objects) ? data.objects : [])
     .filter((o) => o && types.includes(o.type))
@@ -111,21 +140,12 @@ export function normalizeScene(data) {
       scale: vec3(o.scale, [1, 1, 1]),
       grey: Number.isFinite(o.grey) ? Math.min(1, Math.max(0, o.grey)) : 0.8,
     }));
-  const cam = data.camera || {};
-  const keys = (Array.isArray(cam.keys) ? cam.keys : [])
-    .filter((k) => k && Number.isInteger(k.frame) && vec3(k.position) && vec3(k.target))
-    .map((k) => ({ frame: k.frame, position: k.position.map(Number), target: k.target.map(Number) }));
   const out = data.output || {};
   return {
     version: 1,
     name: typeof data.name === 'string' && data.name ? data.name : base.name,
     objects,
-    camera: {
-      fov: Number.isFinite(cam.fov) ? cam.fov : base.camera.fov,
-      lensShift: Number.isFinite(cam.lensShift) ? cam.lensShift : 0,
-      ease: cam.ease === 'linear' ? 'linear' : 'smooth',
-      keys: keys.length ? keys : base.camera.keys,
-    },
+    ...normalizeShots(data, base.camera),
     fog: Array.isArray(data.fog) && data.fog.length === 2 && data.fog.every(Number.isFinite) ? data.fog : base.fog,
     output: {
       width: Number.isInteger(out.width) ? out.width : base.output.width,

@@ -15,6 +15,7 @@ def _load(name):
 
 
 layout = _load("make_test_layout")
+hero = _load("make_hero")
 check = _load("check_open_weights")
 
 
@@ -58,3 +59,13 @@ def test_open_weights_checker(tmp_path):
     (tmp_path / "bad.json").write_text(json.dumps(bad))
     assert check.main([str(tmp_path / "good.json")]) == 0
     assert check.main([str(tmp_path / "bad.json")]) == 1
+
+
+def test_hero_gif(tmp_path, monkeypatch):
+    assert "hstack=inputs=2" in hero.hero_filter(480, 12)
+    out = tmp_path / "hero.gif"
+    monkeypatch.setattr("sys.argv", ["make_hero.py", "-o", str(out), "--width", "160", "--fps", "6"])
+    hero.main()
+    data = out.read_bytes()
+    assert data[:6] == b"GIF89a"
+    assert int.from_bytes(data[6:8], "little") == 320  # two 160-wide halves

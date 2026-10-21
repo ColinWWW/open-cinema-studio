@@ -3,6 +3,8 @@
 // playblast. The dev server proxies /api/render, /api/look and /api/health to it; a page served from
 // elsewhere (GitHub Pages) calls the server at the URL set in the panel (server started with --cors-origin).
 
+import { PROMPT_IDEAS, variantSeeds } from './prompts.js';
+
 const BANNED = ['clay', '3d', 'unreal']; // the model card: describe the finished shot, not the layout
 
 /** Prompt problems worth showing before spending a render. */
@@ -107,6 +109,16 @@ export async function runJob(kind, form, { server = '', fetchFn = fetch, onUpdat
 
 export const runRender = (form, opts) => runJob('render', form, opts);
 
+/** POST /api/stitch: cut finished renders (clip 'render') or their layout clips ('layout') together, in order. */
+export async function stitchShots(ids, { server = '', clip = 'render', fetchFn = fetch } = {}) {
+  const res = await fetchFn(apiUrl(server, '/api/stitch'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ renders: ids, clip }),
+  });
+  const seq = await json(res);
+  if (seq.status !== 'succeeded') throw new Error(seq.error || 'could not join the shots');
+  return seq;
+}
+
 /** GET /api/health on the render server. Resolves with {ok, target}; throws if nothing (or not our server) answers. */
 export async function checkHealth(server, { fetchFn = fetch, timeoutMs = 5000 } = {}) {
   const signal = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(timeoutMs) : undefined;
@@ -137,7 +149,7 @@ export function describeState(s) {
  * a file, or is generated from frame 0's depth map (POST /api/look) so it matches the layout box for box.
  * When no render server answers, the panel shows the bundled plaza example instead (demo mode).
  */
-export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = false }) {
+export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, proxied = false }) {
   const $ = (id) => document.getElementById(id);
   const panel = $('render-panel');
   let server = loadServer();
@@ -160,6 +172,11 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
     const noPrompt = !$('render-prompt').value.trim();
     $('render-go').disabled = busy || demoMode || !look || noPrompt;
     $('render-generate').disabled = busy || demoMode || noPrompt;
+    $('render-variants-go').disabled = busy || demoMode || noPrompt;
+    const shots = getScene().shots.length;
+    $('render-all').disabled = busy || demoMode || noPrompt || shots < 2;
+    $('render-all').textContent = shots < 2 ? 'Render all shots' : `Render all ${shots} shots`;
+    $('render-all').title = shots < 2 ? 'Add shots (Shots > + Shot) to render a sequence' : $('render-all').dataset.title;
     if (demoMode) {
       $('render-hints').textContent = 'Connect a render server to generate look stills and render your own shot.';
       return;
@@ -187,6 +204,7 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
         $(id).src = demo[key];
       }
       $('render-download').hidden = true;
+      $('render-download-layout').hidden = true;
       $('render-play').click();
     } else {
       setUrl($('render-frame0'), blast?.firstFrame);
@@ -195,6 +213,7 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
       setUrl($('render-look-img'), look?.blob);
       setUrl($('render-result'), rendered);
       $('render-download').hidden = !rendered;
+      $('render-download-layout').hidden = true;
       if (rendered) $('render-download').href = urls.get($('render-result'));
     }
     refreshHints();
@@ -204,8 +223,29 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
   const setLook = (blob, name, width, height, key = null) => {
     look = { blob, name, width, height, key };
     if (!demoMode) setUrl($('render-look-img'), blob);
+    for (const b of $('render-variants').children) b.classList.toggle('active', b.still?.blob === blob);
     refreshHints();
   };
+
+  /** Every generated still stays in a strip under the look (newest first, up to 8): click one to use it. */
+  function addStill(still) {
+    const strip = $('render-variants');
+    const b = document.createElement('button');
+    b.still = still;
+    b.title = `Seed ${still.seed}: ${still.prompt}`;
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(still.blob);
+    const cap = document.createElement('span');
+    cap.textContent = still.caption || `seed ${still.seed}`;
+    b.append(img, cap);
+    b.addEventListener('click', () => setLook(still.blob, still.name, still.width, still.height, still.key));
+    strip.prepend(b);
+    while (strip.children.length > 8) {
+      URL.revokeObjectURL(strip.lastChild.querySelector('img').src);
+      strip.lastChild.remove();
+    }
+    strip.hidden = false;
+  }
 
   /** The playblast of the current scene, exported again only if the scene changed. */
   async function currentBlast(status) {
@@ -228,7 +268,7 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
     const status = $('render-status');
     try {
       await work(status, (s) => {
-        status.textContent = `${label}: ${describeState(s)}`;
+        status.textContent = `${s.label || label}: ${describeState(s)}`;
         $('render-progress').value = s.status === 'succeeded' ? 1 : s.progress || 0;
       });
     } catch (err) {
@@ -265,11 +305,13 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
       $('render-server').classList.add('bad');
       return;
     }
-    $('render-server-url').value = server;
+    $('render-all').dataset.title = $('render-all').title;
+  $('render-server-url').value = server;
     saveServer(server);
     checkServer();
   };
 
+  $('render-all').dataset.title = $('render-all').title;
   $('render-server-url').value = server;
   $('render-server-url').addEventListener('change', connect);
   $('render-connect').addEventListener('click', connect);
@@ -290,17 +332,91 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
     bmp.close();
   });
 
-  $('render-generate').addEventListener('click', () =>
+  /** Generate one look still per seed from frame 0's depth; the first becomes the look, all go in the strip. */
+  const generateLooks = (seeds) =>
     withBusy('Look still', async (status, onUpdate) => {
       const { depth } = await currentBlast(status);
       const scene = getScene();
-      const form = lookForm({
-        depth, prompt: $('render-prompt').value, output: scene.output, seed: Number($('render-seed').value) || 42,
-      });
-      const final = await runJob('look', form, { server, onUpdate });
-      const still = await (await fetch(apiUrl(server, final.image_url))).blob();
-      setLook(still, `look_${final.id}.png`, scene.output.width, scene.output.height, blast.key);
-      status.textContent = `Look still ready in ${final.seconds}s. Happy with it? Render the shot, or generate again with another seed.`;
+      const prompt = $('render-prompt').value;
+      for (const [i, seed] of seeds.entries()) {
+        const label = seeds.length > 1 ? `Look still ${i + 1}/${seeds.length}` : 'Look still';
+        const form = lookForm({ depth, prompt, output: scene.output, seed });
+        const final = await runJob('look', form, { server, onUpdate: (s) => onUpdate({ ...s, label }) });
+        const blob = await (await fetch(apiUrl(server, final.image_url))).blob();
+        const still = { blob, name: `look_${final.id}.png`, width: scene.output.width, height: scene.output.height, key: blast.key, seed, prompt };
+        addStill(still);
+        if (i === 0) setLook(still.blob, still.name, still.width, still.height, still.key);
+        status.textContent = `${label} ready in ${final.seconds}s.`;
+      }
+      status.textContent += seeds.length > 1
+        ? ' Click the still you like in the strip, then render the shot.'
+        : ' Happy with it? Render the shot, or generate again with another seed.';
+    });
+  const seed = () => Number($('render-seed').value) || 42;
+
+  $('render-generate').addEventListener('click', () => generateLooks([seed()]));
+  let variantsAfter = null; // the next "3 variants" carries on from the last seed it used
+  $('render-seed').addEventListener('input', () => (variantsAfter = null));
+  $('render-variants-go').addEventListener('click', () => {
+    const seeds = variantSeeds((variantsAfter ?? seed()) + 1, 3);
+    variantsAfter = seeds[2];
+    generateLooks(seeds);
+  });
+
+  for (const { group, prompts } of PROMPT_IDEAS) {
+    const og = document.createElement('optgroup');
+    og.label = group;
+    for (const p of prompts) og.append(new Option(p.length > 44 ? `${p.slice(0, 42)}…` : p, p));
+    $('render-ideas').append(og);
+  }
+  $('render-ideas').addEventListener('change', (e) => {
+    if (!e.target.value) return;
+    $('render-prompt').value = e.target.value;
+    e.target.value = '';
+    refreshHints();
+  });
+
+  /** Show a finished clip in the result player with a download link. */
+  function showResult(blob, filename, link = 'render-download', el = 'render-result', text = 'Download render') {
+    setUrl($(el), blob);
+    const a = $(link);
+    a.textContent = text;
+    a.href = urls.get($(el));
+    a.download = filename;
+    a.hidden = false;
+  }
+
+  $('render-all').addEventListener('click', () =>
+    withBusy('Sequence', async (status, onUpdate) => {
+      for (const id of ['render-download', 'render-download-layout']) $(id).hidden = true;
+      const prompt = $('render-prompt').value;
+      const n = getScene().shots.length;
+      const ids = [];
+      for (let i = 0; i < n; i++) {
+        const stem = showShot(i);
+        const label = `Shot ${i + 1}/${n}`;
+        const { depth, mp4 } = await currentBlast(status);
+        const scene = getScene();
+        const lookJob = await runJob('look', lookForm({ depth, prompt, output: scene.output, seed: seed() }), {
+          server, onUpdate: (s) => onUpdate({ ...s, label: `${label} look still` }),
+        });
+        const still = await (await fetch(apiUrl(server, lookJob.image_url))).blob();
+        addStill({ blob: still, name: `${stem}_look.png`, width: scene.output.width, height: scene.output.height, key: blast.key, seed: seed(), prompt, caption: `shot ${i + 1}` });
+        setLook(still, `${stem}_look.png`, scene.output.width, scene.output.height, blast.key);
+        const form = renderForm({ mp4, look: still, lookName: `${stem}_look.png`, prompt, output: scene.output, seed: seed() });
+        const final = await runRender(form, { server, onUpdate: (s) => onUpdate({ ...s, label: `${label} render` }) });
+        ids.push(final.id);
+      }
+      status.textContent = 'Cutting the shots together…';
+      const [seq, layout] = await Promise.all([stitchShots(ids, { server }), stitchShots(ids, { server, clip: 'layout' })]);
+      const name = (getScene().name || 'scene').replace(/[^\w.-]+/g, '_');
+      rendered = await (await fetch(apiUrl(server, seq.video_url))).blob();
+      showResult(rendered, `${name}_sequence_${seq.id}.mp4`, 'render-download', 'render-result', 'Download sequence');
+      showResult(await (await fetch(apiUrl(server, layout.video_url))).blob(), `${name}_layout_sequence_${layout.id}.mp4`,
+        'render-download-layout', 'render-blast', 'Download layout sequence');
+      blast = null; // the playblast player now shows the layout sequence
+      status.textContent = `Sequence done: ${n} shots, ${seq.frames} frames (${(seq.frames / 24).toFixed(1)} s).`;
+      $('render-play').click();
     }),
   );
 
@@ -313,20 +429,16 @@ export function initRenderPanel({ getScene, exportPlayblast, demo, proxied = fal
 
   $('render-go').addEventListener('click', () =>
     withBusy('Render', async (status, onUpdate) => {
-      $('render-download').hidden = true;
+      for (const id of ['render-download', 'render-download-layout']) $(id).hidden = true;
       const { mp4 } = await currentBlast(status);
       const scene = getScene();
       const form = renderForm({
         mp4, look: look.blob, lookName: look.name, prompt: $('render-prompt').value,
-        output: scene.output, seed: Number($('render-seed').value) || 42,
+        output: scene.output, seed: seed(),
       });
       const final = await runRender(form, { server, onUpdate });
       rendered = await (await fetch(apiUrl(server, final.video_url))).blob();
-      setUrl($('render-result'), rendered);
-      const a = $('render-download');
-      a.href = urls.get($('render-result'));
-      a.download = `${(scene.name || 'shot').replace(/[^\w.-]+/g, '_')}_render_${final.id}.mp4`;
-      a.hidden = false;
+      showResult(rendered, `${(scene.name || 'shot').replace(/[^\w.-]+/g, '_')}_render_${final.id}.mp4`);
       $('render-play').click();
     }),
   );
