@@ -18,6 +18,7 @@
       <label>Size <select id="resolution"></select></label>
       <label>Frames <select id="frames"></select></label>
       <span class="muted">24 fps</span>
+      <button id="replay-open" title="Replay a real render of the plaza example, step by step">▶ Demo</button>
       <button id="export">Export playblast</button>
       <button id="render-open" class="primary" title="Render the shot with LTX-2.5 through ComfyUI">Render…</button>
     </header>
@@ -171,6 +172,27 @@
         <button id="render-play">Play both</button>
         <a id="render-download" hidden>Download render</a>
         <a id="render-download-layout" hidden>Download layout sequence</a>
+      </div>
+    </div>
+
+    <div id="replay" hidden>
+      <div class="replay-head">
+        <strong id="replay-title"></strong>
+        <span id="replay-dots"></span>
+        <button id="replay-close" title="Close the demo">Close</button>
+      </div>
+      <p id="replay-text"></p>
+      <img id="replay-img" alt="" hidden />
+      <div id="replay-videos" class="replay-videos" hidden>
+        <figure><video id="replay-layout" muted loop playsinline></video><figcaption>Layout (blocked in the browser)</figcaption></figure>
+        <figure id="replay-render-fig" hidden><video id="replay-render" muted loop playsinline></video><figcaption>LTX-2.5 render</figcaption></figure>
+      </div>
+      <progress id="replay-progress" max="1" value="0" hidden></progress>
+      <div id="replay-status" class="muted"></div>
+      <div id="replay-end" class="render-row" hidden>
+        <button id="replay-edit" class="primary">Edit the plaza</button>
+        <button id="replay-render-btn">Render your own…</button>
+        <button id="replay-again">Replay</button>
       </div>
     </div>
 

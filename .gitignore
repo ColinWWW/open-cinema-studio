@@ -22,3 +22,7 @@ web/exports/
 
 # Render server outputs
 server/renders/
+
+# Playwright smoke test output
+web/test-results/
+web/playwright-report/

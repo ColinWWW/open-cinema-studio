@@ -7,13 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "mp4-muxer": "5.2.2",
     "three": "0.186.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "vite": "8.3.4"
   }
 }

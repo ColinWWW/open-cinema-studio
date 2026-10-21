@@ -305,8 +305,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
       $('render-server').classList.add('bad');
       return;
     }
-    $('render-all').dataset.title = $('render-all').title;
-  $('render-server-url').value = server;
+    $('render-server-url').value = server;
     saveServer(server);
     checkServer();
   };

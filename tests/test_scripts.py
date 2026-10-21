@@ -69,3 +69,25 @@ def test_hero_gif(tmp_path, monkeypatch):
     data = out.read_bytes()
     assert data[:6] == b"GIF89a"
     assert int.from_bytes(data[6:8], "little") == 320  # two 160-wide halves
+
+
+looks = _load("three_looks")
+
+
+def test_three_looks_match_the_app_prompts():
+    prompts = (ROOT / "web" / "src" / "prompts.js").read_text()
+    assert len(looks.LOOKS) == 3
+    for prompt in looks.LOOKS.values():
+        assert prompt in prompts
+
+
+def test_three_looks_commands_and_grid():
+    cmds = looks.render_commands(seed=7)
+    assert [c[2] for c in cmds] == ["server.look", "server.render"] * 3
+    assert all(c[-2:] == ["--seed", "7"] for c in cmds)
+    # each render uses the look still made just before it
+    assert cmds[1][4] == cmds[0][cmds[0].index("-o") + 1]
+    assert looks.DEPTH.exists() and looks.LAYOUT.exists()
+    f = looks.grid_filter(480)
+    assert "xstack=inputs=4" in f and "palettegen" not in f
+    assert "palettegen" in looks.grid_filter(320, fps=12, gif=True)

@@ -26,6 +26,8 @@ follows that camera move and layout. Real A40 output, stage 1, from <code>exampl
 
 **Live:** https://colinwww.github.io/open-cinema-studio/ *(goes live on submission night)*. Use Chrome or Edge.
 
+On a first visit the page replays a real render of the plaza example step by step (**▶ Demo** plays it
+again): the layout, its depth, the look still and the LTX-2.5 render, with the real A40 timings sped up.
 The page is the whole blocking tool: load the **Plaza** preset (or block your own shot), scrub the
 camera, and **Export playblast**, all in your browser. **Render…** needs a render server with a GPU
 behind it; when none answers, the panel shows a **Demo**: the bundled plaza example (layout clip, its
@@ -49,6 +51,11 @@ All from the same plaza layout on an A40, stage 1 (960×576, 65 frames). Click a
 
 - Layout clip, frame by frame: [contact sheet](examples/layout_plaza_dolly_in_frames.png)
 - Render from the generated look still: [contact sheet](examples/stage1_genlook_plaza_frames.png)
+<!-- Same blocking, three looks: uncomment once `python scripts/three_looks.py` has run on the GPU.
+<p align="center"><img src="docs/media/three_looks.gif" width="100%" alt="Top left: the grey plaza layout. The other three: LTX-2.5 renders of the same layout and camera move as a sunny day, a rainy night and a snowy dusk."></p>
+<p align="center"><sub>One layout, three prompts: same blocking and camera, only the look changes (<code>scripts/three_looks.py</code>).</sub></p>
+-->
+
 - Render from a reference photo instead ([`look_plaza.jpg`](examples/look_plaza.jpg)): [contact sheet](examples/stage1_core_plaza_frames.png)
 
 ## How it works
@@ -75,7 +82,8 @@ its depth map (near = white, sky = black).
 With the dev server running, exports are also written to `web/exports/`. Scenes save as JSON;
 the **Blocks** and **Plaza** presets reproduce `scripts/make_test_layout.py`'s clips.
 
-Tests: `cd web && npm test`.
+Tests: `cd web && npm test`. Smoke test of the production build as GitHub Pages serves it (no render
+server): `npm run test:e2e` (Playwright; in Chrome the demo clips are also checked to decode).
 
 ## Render (Comfy SDK)
 
