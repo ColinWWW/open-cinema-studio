@@ -42,8 +42,8 @@ All renders are of our own grey layouts, made with the models above on our A40 p
 | Files | Made from | Status |
 |---|---|---|
 | `layout_*` (clips, frame 0, depth, contact sheets) | `scripts/make_test_layout.py` / the `web/` exporter | ✅ ours |
-| `look_gen_plaza_a40.png`, `stage1_genlook_plaza_*` | generated from our plaza depth map (Z-Image-Turbo + ControlNet, then LTX-2.5) | ✅ ours; used by the README, the hero GIF and the live demo |
-| `docs/media/hero.gif` | `scripts/make_hero.py` from the two above | ✅ ours |
+| `look_gen_plaza_a40.png`, `stage1_genlook_plaza_*` | generated from our plaza depth map (Z-Image-Turbo + ControlNet, then LTX-2.5) | ✅ ours; used by the README and the live demo |
+| `docs/media/hero.gif` | `scripts/make_hero.py`: `layout_plaza_dolly_in.mp4` beside `stage1_day_plaza_a40.mp4` (Oct 21, the day look that keeps the sky) | ✅ ours |
 | `look_gen_plaza_1920_a40.png`, `two_stage_plaza_1920_a40.mp4` | generated from our plaza depth map at 1920×1088, then LTX-2.5 stage 1 + stage 2 (Oct 21) | ✅ ours |
 | `stage1_plaza_121f_a40.mp4` | LTX-2.5 stage 1, 121 frames, from our plaza layout and `look_gen_plaza_a40.png` (Oct 21) | ✅ ours |
 | `look_day_plaza.png`, `look_night_plaza.png`, `look_snow_plaza.png`, `stage1_{day,night,snow}_plaza_a40.mp4`, `three_looks_plaza.mp4`, `docs/media/three_looks.gif` | `scripts/three_looks.py`: three look stills generated from our plaza depth map, their LTX-2.5 renders, and the grid of them beside the layout (Oct 21) | ✅ ours |
