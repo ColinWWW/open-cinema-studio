@@ -12,20 +12,21 @@ The field headings below are what we expect the form to ask; paste each answer i
 
 ## One line
 
-Block a shot with grey boxes and a camera move in your browser, and get back a cinematic clip that
-follows that exact camera and layout. Open weights only: LTX-2.5 + Layout-to-Render, through the Comfy SDK.
+Block a person walking, get a person walking: key grey stand-ins and a camera move in your browser, and
+get back a cinematic clip that follows that exact blocking, move and camera. Open weights only: LTX-2.5 +
+Layout-to-Render, through the Comfy SDK.
 
 ## Description (about 150 words)
 
-<NAME> is previs that turns into the final shot. You block a scene in a three.js editor in the
-browser: grey boxes, people and walls, and a keyframed shot camera or a one-click move (dolly, truck,
-crane, orbit). The browser exports an on-spec playblast and frame 0's depth map. Z-Image-Turbo with a
-depth ControlNet paints a finished first frame from that depth, so it lines up with the layout box for
-box. Then LTX-2.5 with the Layout-to-Render IC-LoRA films the shot: it follows the layout's camera and
-blocking and takes its look from that frame. Shots render at 960×576, up to 121 frames (5 s), or at
-1920×1088 with a second refine stage. A scene can hold several shots, and **Render all shots** renders
-them in order and cuts them into one sequence. Change the prompt, not the shot: the same blocking
-renders as a sunny day, a rainy night or a snowy dusk.
+<NAME> is previs that turns into the final shot: block a person walking, get a person walking. In a
+browser editor you place grey boxes, people and walls, key them to move, and key a camera or pick a
+move (dolly, truck, crane, orbit). The browser exports a playblast and frame 0's depth map.
+Z-Image-Turbo with a depth ControlNet paints a first frame from that depth, so it lines up box for box.
+Then LTX-2.5 with the Layout-to-Render IC-LoRA films the shot: camera, blocking and walk follow the
+layout, and the look comes from that frame. Shots render at 960×576 (up to 5 s) or 1920×1088 with a
+refine stage, and **Render all shots** cuts several into a sequence. Change the prompt, not the shot:
+one layout renders as a sunny day, a rainy night or a snowy dusk. Share a scene as a link, or render
+from the live page with your own Comfy key.
 
 ## Prize categories
 
@@ -35,13 +36,20 @@ Open Weights Only, and the bonus VFX Workflow Built with LTX.
 
 - LTX-2.5 is the core video model: every clip is LTX-2.5 + the Layout-to-Render IC-LoRA.
 - It is a VFX and previs workflow: block, playblast, art-direct, render, cut. The artist sets the
-  camera and the layout; the model doesn't get to improvise them.
+  camera, the layout and how the stand-ins move; the model doesn't get to improvise them. A person
+  stand-in keyed to walk across the plaza under an orbit comes back as a woman walking the same path,
+  step for step (`docs/media/walk.gif`).
 - Our own workflows, built from ComfyUI core nodes by `server/workflow.py` and checked in CI, are in
   [workflows/](../../workflows/): stage 1 (960×576), two-stage (1920×1088: x2 latent upscale and 3
   refine steps) and the depth-matched look still.
-- Real output, all from one plaza layout on an A40: stage 1 in about 2.5–4 minutes per 65-frame shot,
-  121 frames (5 s) in about 4 minutes, stage 2 at 1920×1088 (97 frames) in about 6 minutes, three
-  looks of the same blocking and a four-shot sequence (dolly in, orbit right, crane up, truck right).
+- Real output on an A40: the walk (97 frames, orbit right); one layout with four camera moves in
+  four places (orbit on a foggy harbour, crane up in a desert, truck through neon Tokyo, dolly into a
+  warehouse; `docs/media/four_moves.gif`); three looks of the same plaza blocking, also as 1920×1088
+  finals; and a four-shot sequence from **Render all shots**. Stage 1 takes about 2.5–4 minutes per
+  65-frame shot and 121 frames (5 s) in about 4 minutes; stage 2 at 1920×1088 (97 frames) about 6.
+- Prompts are part of the workflow: every **Prompt ideas** entry was checked on an A40 with three
+  seeds to keep the layout, and reworded where it drifted (name the sky where the layout has sky, and
+  say where the big shapes are).
 
 ## Why it fits Open Weights Only
 
@@ -57,13 +65,16 @@ Open Weights Only, and the bonus VFX Workflow Built with LTX.
 `server/` runs every job (look still, render, stage 2) through `comfy-sdk`'s `AsyncComfy`. The browser
 shows progress by node and sampler step, and **Cancel** stops a job on the GPU too. The browser app is
 the standalone app; the render server is one command (`python -m server.app`), and
-`python -m server.doctor` checks the setup before you spend GPU time.
+`python -m server.doctor` checks the setup before you spend GPU time. On the live page, **Render…**
+also takes your own Comfy key instead of a server URL and runs the same committed workflows over the
+Comfy API the SDK speaks (see `docs/LIVE_RENDER.md`).
 
 ## Links
 
 - Live link: <live link> (https://colinwww.github.io/open-cinema-studio/ until a rename). It opens with
   a step-by-step replay of a real A40 render of the plaza example (no GPU needed), then the full
-  blocking tool. Use Chrome or Edge.
+  blocking tool. **Share link** copies a URL that opens your scene, and the page shows a preview card
+  when the link is posted. Use Chrome or Edge.
 - Repo: https://github.com/ColinWWW/open-cinema-studio (MIT). Run-locally steps are in the README.
 - Demo video: <video link>
 - Social post: link to the X/Bluesky post once it's up.
@@ -75,12 +86,13 @@ also give `<video link>` for anyone who wants the full-length version.
 
 ### X / Bluesky
 
-242 characters as written. On X each link counts as 23, so with both links and a name of up to 20
+240 characters as written. On X each link counts as 23, so with both links and a name of up to 20
 letters it stays under 280. Bluesky (300 limit) counts a link at its full length: attach the video
 there and drop the "Video:" line.
 
-> Block a shot with grey boxes in your browser. Get back a cinematic clip that moves exactly like it.
-> <NAME>: LTX-2.5 + Layout-to-Render, open weights only, built on the Comfy SDK.
+> Block a person walking, get a person walking. Key grey stand-ins and a camera in your browser;
+> LTX-2.5 + Layout-to-Render films it.
+> <NAME>: open weights only, on the Comfy SDK.
 >
 > Try it: <live link>
 > Video: <video link>
@@ -92,10 +104,11 @@ there and drop the "Video:" line.
 > Directors block shots with stand-ins before they light them. I built <NAME> to do the same with
 > video models.
 >
-> You place grey boxes and people in a browser editor and key a camera move. The app exports a
-> playblast and its depth map, Z-Image-Turbo paints a matching first frame, and LTX-2.5 with the
-> Layout-to-Render IC-LoRA films the shot, following your exact camera and layout. Several shots
-> render and cut into one sequence, and the same blocking can take any look.
+> Block a person walking, get a person walking. You place grey boxes and people in a browser editor,
+> key them to move, and key a camera move. The app exports a playblast and its depth map,
+> Z-Image-Turbo paints a matching first frame, and LTX-2.5 with the Layout-to-Render IC-LoRA films the
+> shot, following your exact camera, layout and walk. Several shots render and cut into one sequence,
+> and the same blocking can take any look.
 >
 > Open weights only, built on the Comfy SDK, MIT licensed. My entry to Comfy's Open Source Higgsfield
 > challenge.
@@ -107,11 +120,13 @@ there and drop the "Video:" line.
 
 ### Reddit r/comfyui
 
-**Title:** <NAME>: block a shot with grey boxes in the browser, LTX-2.5 Layout-to-Render films it (open weights, Comfy SDK)
+**Title:** <NAME>: block a person walking with grey stand-ins in the browser, LTX-2.5 Layout-to-Render films a person walking (open weights, Comfy SDK)
 
 > I built a previs tool for the Open Source Higgsfield challenge (#OpenSourceHiggsfield). You block a
-> scene in a three.js editor (grey boxes, people, walls), key a camera or pick a move (dolly, truck,
-> crane, orbit), and export a playblast plus frame 0's depth map from the browser.
+> scene in a three.js editor (grey boxes, people, walls), key stand-ins to move along the shot, key a
+> camera or pick a move (dolly, truck, crane, orbit), and export a playblast plus frame 0's depth map
+> from the browser. A person stand-in keyed to walk across a plaza under an orbit comes back as a woman
+> walking the same path, step for step.
 >
 > Z-Image-Turbo with the Fun ControlNet Union (depth) turns that depth map into a look still that
 > lines up box for box. Then LTX-2.5 with the Layout-to-Render IC-LoRA renders the clip from the
@@ -119,7 +134,9 @@ there and drop the "Video:" line.
 > latent upscale and 3 refine steps.
 >
 > Everything is core nodes, workflows are in the repo, and the server drives ComfyUI through the
-> Comfy SDK (Comfy Cloud or your own GPU via comfy-api-proxy). On an A40: about 2.5–4 min per
-> 65-frame shot, about 6 min for 1920×1088.
+> Comfy SDK (Comfy Cloud or your own GPU via comfy-api-proxy); the live page can also render with
+> your own Comfy key. On an A40: about 2.5–4 min per 65-frame shot, about 6 min for 1920×1088. Same
+> layout, four moves, four places (harbour orbit, desert crane, Tokyo truck, warehouse dolly) is in the
+> README.
 >
 > Live demo: <live link> · Video: <video link> · Repo: https://github.com/ColinWWW/open-cinema-studio

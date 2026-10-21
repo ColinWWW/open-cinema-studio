@@ -19,13 +19,17 @@ follows that camera move and layout. Real A40 output, stage 1, from <code>exampl
 
 ## 60 seconds
 
-- **What it does:** you block out a shot in the browser (grey boxes and a keyed camera path), add one prompt,
-  and get back a cinematic clip that follows that exact camera move and layout, rendered by LTX-2.5 in ComfyUI.
-- **Why it's different:** you set the camera and the layout; the model only paints. The layout clip and its
+- **What it does:** block a person walking, get a person walking. You block out a shot in the browser (grey
+  boxes and people, keyed to move if you like, and a keyed camera path), add one prompt, and get back a cinematic
+  clip that follows that exact camera move, layout and walk, rendered by LTX-2.5 in ComfyUI.
+- **Why it's different:** you set the camera, the layout and how the stand-ins move; the model only paints. The layout clip and its
   depth drive both the look still (Z-Image-Turbo + depth ControlNet) and the clip (LTX-2.5 + the Layout-to-Render
   IC-LoRA), so the render lines up box for box instead of reinterpreting your shot. Open weights only.
+- **See it:** a [keyed person walking across the plaza](#blocking-tool) ([`walk.gif`](docs/media/walk.gif)) and
+  [one layout with four camera moves in four places](#examples) ([`four_moves.gif`](docs/media/four_moves.gif)).
 - **How to try it:** open the [live page](https://colinwww.github.io/open-cinema-studio/) (Chrome or Edge): it
-  replays a real A40 render on first visit, and **Render…** takes a render server URL or your own Comfy key.
+  replays a real A40 render on first visit, **Share link** copies a link that opens your scene, and
+  **Render…** takes a render server URL or your own Comfy key.
   No GPU? Run the whole chain locally against the [stand-in ComfyUI](#render-comfy-sdk).
 
 <p align="center">
@@ -47,7 +51,9 @@ Single A40 runs on Oct 21; your times will vary.
 > layout's own depth, so it lines up box for box, and the stage-1 video render from it keeps both the look and the
 > layout (see [Examples](#examples)). Stage 2 (1920×1088: an x2 latent upscale and 3 refine steps) runs on the
 > A40 too: 97 frames in about 6 minutes, and it holds the layout at full resolution. Stage 1 also handles
-> 121 frames (5 s) in about 4 minutes. Plan, specs and budget: [docs/PLAN.md](docs/PLAN.md).
+> 121 frames (5 s) in about 4 minutes. Moving stand-ins render too: a person keyed to walk across the plaza
+> comes back as a woman walking the same path under an orbit (97 frames). Plan, specs and budget:
+> [docs/PLAN.md](docs/PLAN.md).
 
 ## Try it
 
