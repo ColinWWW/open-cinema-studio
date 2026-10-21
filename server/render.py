@@ -1,4 +1,5 @@
-"""Run one stage-1 render through the Comfy SDK: layout clip + look still + prompt -> MP4.
+"""Run one render through the Comfy SDK: layout clip + look still + prompt -> MP4 (stage 1; a 1920x1088
+layout also gets stage 2, the x2 latent upscale).
 
 The SDK targets Comfy Cloud by default; set COMFY_BASE_URL to run elsewhere:
     COMFY_BASE_URL=http://127.0.0.1:8189   self-hosted ComfyUI behind comfy-api-proxy (RunPod, mock)
@@ -67,19 +68,30 @@ def prompt_warnings(prompt):
     return [f"avoid the word {w!r} in the prompt (describe the finished shot)" for w in BANNED_WORDS if w in words]
 
 
+def progress_fields(ev, titles):
+    """What a Progress event says, for the status line: overall fraction, the running node's title, its step."""
+    out = {"stage": "rendering", "progress": ev.value}
+    if ev.current_node:
+        out["node"] = titles.get(str(ev.current_node), str(ev.current_node))
+    if ev.steps:
+        out["step"], out["steps"] = ev.step, ev.steps
+    return out
+
+
 async def _run(client, wf, output_node, kind, *, out=None, on_progress=None):
     """Submit once, follow progress, download the first `kind` ("video"/"image") output of `output_node`.
-    Returns (bytes, comfy job id)."""
+    Returns (bytes, comfy job id). The job handle goes to on_progress(handle=...) so it can be cancelled."""
     report = on_progress or (lambda **kw: None)
+    titles = {nid: n.get("_meta", {}).get("title", n.get("class_type", nid)) for nid, n in wf.json.items()}
     report(stage="uploading")
     job = await client.submit(wf)
-    report(stage="queued", job_id=job.id)
+    report(stage="queued", job_id=job.id, handle=job)
 
     async def follow():  # live progress only; job.result() below is the authority
         try:
             async for ev in job.events():
                 if isinstance(ev, Progress):
-                    report(stage="rendering", progress=ev.value)
+                    report(**progress_fields(ev, titles))
                 elif isinstance(ev, StatusChange):
                     report(stage=ev.status)
                 elif isinstance(ev, OutputReady):
@@ -103,13 +115,21 @@ async def _run(client, wf, output_node, kind, *, out=None, on_progress=None):
     return data, job.id
 
 
-async def render(client, layout, look, prompt, *, width, height, frames, seed=42, out=None, on_progress=None):
+def uses_stage2(width, height, two_stage=True):
+    """A layout twice the stage-1 size (1920x1088) gets stage 2, so the clip comes out at the layout's size."""
+    w, h = stage1_size(width, height)
+    return two_stage and (2 * w, 2 * h) == (width, height)
+
+
+async def render(client, layout, look, prompt, *, width, height, frames, seed=42, two_stage=True, out=None,
+                 on_progress=None):
     """Upload inputs, run the graph, download the clip. Returns (mp4 bytes, comfy job id)."""
     check_dims(width, height, frames)
     if not prompt.strip():
         raise ValueError("prompt is empty")
     w, h = stage1_size(width, height)
-    wf = client.workflows.from_json(build_stage1(prompt=prompt, width=w, height=h, frames=frames, seed=seed))
+    wf = client.workflows.from_json(build_stage1(prompt=prompt, width=w, height=h, frames=frames, seed=seed,
+                                                 stage2=uses_stage2(width, height, two_stage)))
     wf.set_input(NODES["layout"], "file", client.assets.from_file(layout))
     wf.set_input(NODES["look"], "image", client.assets.from_file(look))
     return await _run(client, wf, NODES["output"], "video", out=out, on_progress=on_progress)
@@ -138,12 +158,13 @@ def _probe(path):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Stage-1 Layout-to-Render via the Comfy SDK")
+    ap = argparse.ArgumentParser(description="Layout-to-Render via the Comfy SDK (stage 1, + stage 2 for 1920x1088)")
     ap.add_argument("layout", help="layout playblast MP4 (24 fps, /64 dims, 8k+1 frames)")
     ap.add_argument("look", help="look still for frame 0 (PNG/JPG, same framing as the layout)")
     ap.add_argument("prompt")
     ap.add_argument("-o", "--out", default="render.mp4")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--stage1-only", action="store_true", help="for a 1920x1088 layout, stop at 960x544 (no stage 2)")
     args = ap.parse_args(argv)
 
     w, h, frames = _probe(args.layout)
@@ -154,10 +175,11 @@ def main(argv=None):
         t0 = time.time()
         async with AsyncComfy() as client:
             tolerate_head_rewrites(client)
-            print(f"target: {client!r}, layout {w}x{h} x {frames}, stage 1 at {stage1_size(w, h)}")
+            stages = "stage 1 + stage 2" if uses_stage2(w, h, not args.stage1_only) else "stage 1"
+            print(f"target: {client!r}, layout {w}x{h} x {frames}, {stages} (stage 1 at {stage1_size(w, h)})")
             _, job_id = await render(client, args.layout, args.look, args.prompt, width=w, height=h,
-                                     frames=frames, seed=args.seed, out=args.out,
-                                     on_progress=lambda **kw: print(" ", kw))
+                                     frames=frames, seed=args.seed, two_stage=not args.stage1_only, out=args.out,
+                                     on_progress=lambda **kw: print(" ", {k: v for k, v in kw.items() if k != "handle"}))
         print(f"job {job_id}: wrote {args.out} in {time.time() - t0:.1f}s")
 
     asyncio.run(run())

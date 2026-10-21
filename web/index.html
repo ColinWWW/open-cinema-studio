@@ -163,7 +163,10 @@
       </div>
       <div id="render-variants" class="variants" hidden></div>
       <div id="render-status" class="muted">Exports the playblast if the scene changed, then renders stage 1 (about 3 minutes on an A40).</div>
-      <progress id="render-progress" max="1" value="0"></progress>
+      <div class="render-row">
+        <progress id="render-progress" max="1" value="0"></progress>
+        <button id="render-cancel" title="Stop the job running on the GPU" hidden>Cancel</button>
+      </div>
       <div class="render-videos">
         <figure><video id="render-blast" muted loop playsinline></video><figcaption>Playblast</figcaption></figure>
         <figure><video id="render-result" muted loop playsinline></video><figcaption>Render</figcaption></figure>

@@ -110,7 +110,8 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
 .variants button.active { border-color: var(--accent); }
 .variants img { width: 100%; display: block; border-radius: 2px; }
 .variants span { display: block; font-size: 10px; color: var(--muted); }
-#render-progress { width: 100%; }
+#render-progress { flex: 1; min-width: 0; }
+#render-cancel[hidden] { display: none; }
 .render-videos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .render-videos video { width: 100%; background: #111; border-radius: 4px; display: block; }
 #render-download, #render-download-layout { color: var(--accent); }

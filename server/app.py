@@ -13,6 +13,7 @@ Routes (the Vite dev server proxies them here):
                                   strength? -> 202 {"id"}   (depth-controlled look still, Z-Image-Turbo)
     GET  /api/look/{id}           same status fields as a render
     GET  /api/look/{id}/image     the finished PNG, at width x height
+    POST /api/{render|look}/{id}/cancel   stop a queued or running job (status becomes "cancelled")
     POST /api/stitch              JSON {"renders": [id, ...], "clip": "render"|"layout"} -> 201, a finished
                                   "sequence" job: those renders (or their layout clips) cut together in order
     GET  /api/sequence/{id}/video the joined MP4
@@ -128,30 +129,63 @@ class RenderService:
         job["seconds"] = round(time.time() - t0, 1)
         return rid
 
+    async def cancel(self, rid):
+        """Stop a job: ask Comfy to cancel it if it was submitted, and stop waiting for it here."""
+        job = self.jobs[rid]
+        if job["status"] not in ("queued", "running"):
+            return False
+        job["_cancelled"] = True
+        handle = job.get("_comfy")
+        if handle is not None:
+            try:
+                await handle.cancel()
+            except Exception:  # noqa: BLE001 - a request, not a guarantee; we stop waiting either way
+                pass
+        task = job.get("_task")
+        if task and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        return True
+
     def _spawn(self, rid, run):
         self.jobs[rid]["_task"] = asyncio.get_running_loop().create_task(self._run(rid, run))
 
     async def _run(self, rid, run):
         job = self.jobs[rid]
 
-        def on_progress(stage=None, progress=None, job_id=None):
+        def on_progress(stage=None, progress=None, job_id=None, handle=None, **detail):
             if stage:
                 job["stage"] = stage
             if progress is not None:
                 job["progress"] = progress
             if job_id:
                 job["comfy_job"] = job_id
+            if handle is not None:
+                job["_comfy"] = handle
+            for key in ("node", "step", "steps"):  # what's running right now, for the status line
+                if key in detail:
+                    job[key] = detail[key]
 
-        async with self.lock:
-            job["status"] = "running"
-            t0 = time.time()
-            try:
+        t0 = time.time()
+        try:
+            async with self.lock:
+                job["status"] = "running"
+                t0 = time.time()
                 await run(on_progress)
                 job.update(status="succeeded", stage="done", progress=1.0)
-            except (ComfyError, RuntimeError, ValueError, OSError) as e:
+        except asyncio.CancelledError:
+            if not job.get("_cancelled"):
+                raise
+            job.update(status="cancelled", stage="cancelled", error="cancelled")
+        except (ComfyError, RuntimeError, ValueError, OSError) as e:
+            if job.get("_cancelled"):
+                job.update(status="cancelled", stage="cancelled", error="cancelled")
+            else:
                 job.update(status="failed", stage="failed", error=_describe(e))
-            finally:
-                job["seconds"] = round(time.time() - t0, 1)
+        finally:
+            job["seconds"] = round(time.time() - t0, 1)
+            for key in ("node", "step", "steps"):
+                job.pop(key, None)
 
 
 def _describe(e):
@@ -239,6 +273,16 @@ async def status(request):
     return web.json_response(svc.public(rid))
 
 
+async def cancel(request):
+    svc = request.app[SERVICE]
+    rid = request.match_info["id"]
+    if svc.jobs.get(rid, {}).get("kind") != request.match_info["kind"]:
+        return web.json_response({"error": "unknown job"}, status=404)
+    if not await svc.cancel(rid):
+        return web.json_response({"error": f"job is already {svc.jobs[rid]['status']}", **svc.public(rid)}, status=409)
+    return web.json_response(svc.public(rid))
+
+
 async def result(request):
     svc = request.app[SERVICE]
     rid = request.match_info["id"]
@@ -297,6 +341,7 @@ def make_app(client, renders_dir=RENDERS, cors_origin=None):
         web.post("/api/render", create),
         web.post("/api/look", create_look),
         web.post("/api/stitch", create_sequence),
+        web.post(r"/api/{kind:render|look}/{id}/cancel", cancel),
         web.get(r"/api/{kind:render|look|sequence}/{id}", status),
         web.get(r"/api/{kind:render|sequence}/{id}/video", result),
         web.get(r"/api/{kind:look}/{id}/image", result),

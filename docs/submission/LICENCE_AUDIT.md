@@ -44,12 +44,11 @@ All renders are of our own grey layouts, made with the models above on our A40 p
 | `layout_*` (clips, frame 0, depth, contact sheets) | `scripts/make_test_layout.py` / the `web/` exporter | ✅ ours |
 | `look_gen_plaza_a40.png`, `stage1_genlook_plaza_*` | generated from our plaza depth map (Z-Image-Turbo + ControlNet, then LTX-2.5) | ✅ ours; used by the README, the hero GIF and the live demo |
 | `docs/media/hero.gif` | `scripts/make_hero.py` from the two above | ✅ ours |
-| `test_stage1_a40*`, `test_stage1_noref*` | the blocks layout | ✅ ours |
-| `look_plaza.jpg`, `look_plaza_960x576.png` | **unknown source** | ❓ Where did it come from? If it's an image Colin generated himself (and with an open model), say so here. Otherwise remove it before the repo goes public |
-| `stage1_core_plaza_*`, `gonogo_stage1_plaza_*` | renders that use `look_plaza*` as the first frame | ❓ follow `look_plaza.jpg` |
+| `look_plaza.jpg`, `look_plaza_960x576.png` | source not recorded | ✅ for now: Colin's call on Oct 21 to treat it as fine. Record where it came from before the repo goes public |
+| `stage1_core_plaza_*`, `gonogo_stage1_plaza_*` | renders that use `look_plaza*` as the first frame | ✅ follows `look_plaza.jpg` |
 | `ref_street*`, `gonogo_stage1_street*` | third-party photos | ✅ removed and git-ignored |
 
-If `look_plaza*` has to go: `server/tests/test_e2e.py` and the `server/render.py` usage example use
+If `look_plaza*` ever has to go: `server/tests/test_e2e.py` and the `server/render.py` usage example use
 `look_plaza_960x576.png`, so point them at `look_gen_plaza_a40.png` first. And because the repo will
 be public, a deleted file is still in the git history: rewrite the history (e.g. `git filter-repo
 --path examples/look_plaza.jpg --invert-paths`, for each file) before making it public.

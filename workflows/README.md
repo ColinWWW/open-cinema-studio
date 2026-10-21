@@ -14,6 +14,19 @@ official workflow (`examples/stage1_core_plaza_a40.mp4` vs `gonogo_stage1_plaza_
 sheet in `examples/stage1_core_plaza_frames.png`), with an audio track as a bonus. ~95 s warm.
 The official workflow below stays as a fallback.
 
+## two_stage_layout_api.json (1920×1088)
+
+Stage 1 at 960×544 as above, then stage 2, wired like the second stage of ComfyUI's MIT two-stage
+template `video_ltx2_5_i2v`: the guide frames are cropped off (`LTXVCropGuides`), `LTXVLatentUpsampler`
+with `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0` doubles the latent, the look still goes back on
+frame 0 at full size, and the base distilled model refines it in 3 steps (sigmas 0.85, 0.725, 0.4219, 0)
+with stage 1's audio latent. Stage 2 runs without the IC-LoRA (no guide frames left), so the layout
+carries through the upscaled latent. The server uses it for any 1920×1088 layout (`--stage1-only` to skip).
+
+Checked Oct 21 without a GPU: ComfyUI master (Oct 20) accepts the graph with every node, input and link
+type valid (`POST /prompt`, no node errors), and `server/tests` checks the wiring. **Not yet run on the
+A40**: memory use, time and quality are unknown.
+
 ## look_still_depth_api.json (the look still)
 
 Frame 0's depth map (exported by `web/` with the playblast, near = white) + the prompt → a finished

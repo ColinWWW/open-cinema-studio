@@ -5,7 +5,7 @@ nodes and copies nothing from Lightricks' workflow (which ships under the LTX li
 follows ComfyUI's own MIT templates (LTX-2.5 I2V + LTX-2.3 IC-LoRA) and the Layout-to-Render model
 card: LoRA at 1.0, CFG 1, euler_ancestral, seed 42, 8 distilled steps, look still as frame 0.
 
-    python -m server.workflow            # writes workflows/stage1_layout_api.json + look_still_depth_api.json
+    python -m server.workflow            # writes workflows/*_api.json (stage 1, two-stage, look still)
 
 The server builds the graph at runtime and sets inputs by node id (see NODES); the JSON file is the
 same graph with placeholder inputs, for loading in ComfyUI and for scripts/check_open_weights.py.
@@ -21,10 +21,13 @@ MODELS = {
     "video_vae": "ltx-2.5-video-vae-bf16.safetensors",
     "audio_vae": "ltx-2.5-audio-vae-bf16.safetensors",
     "layout_lora": "ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors",
+    "upscaler": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",  # models/latent_upscale_models
 }
 
 # Distilled stage-1 schedule (8 steps), as in ComfyUI's LTX-2.5 template.
 STAGE1_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+# Stage 2 refines the x2-upscaled latent in 3 steps, as in ComfyUI's two-stage LTX-2.5 I2V template.
+STAGE2_SIGMAS = "0.85, 0.7250, 0.4219, 0.0"
 NEGATIVE = "blurry, low quality, still frame, frames, watermark, overlay, titles, subtitles"
 
 # Node ids the server sets inputs on.
@@ -46,8 +49,9 @@ def _link(node_id, slot=0):
 
 
 def build_stage1(layout="layout.mp4", look="look.png", prompt="", *, width=960, height=576,
-                 frames=65, seed=42, models=None, filename_prefix="cinema-studio/stage1"):
-    """Return the API-format graph. `layout`/`look` are input filenames (or SDK asset handles)."""
+                 frames=65, seed=42, models=None, filename_prefix="cinema-studio/stage1", stage2=False):
+    """Return the API-format graph. `layout`/`look` are input filenames (or SDK asset handles).
+    `width`/`height` are the stage-1 size; with `stage2` the clip comes out at twice that (see add_stage2)."""
     m = {**MODELS, **(models or {})}
     check_dims(width, height, frames, multiple=32)  # the latent only needs /32 (960x544 at stage 1)
     g = {
@@ -100,7 +104,43 @@ def build_stage1(layout="layout.mp4", look="look.png", prompt="", *, width=960, 
         NODES["output"]: _node("SaveVideo", "Save render", video=_link("54"), filename_prefix=filename_prefix,
                                format="mp4", **{"format.codec": "auto"}),
     }
+    if stage2:
+        add_stage2(g, m)
     return g
+
+
+def add_stage2(g, m):
+    """Stage 2: upscale the stage-1 latent x2 (960x544 -> 1920x1088) and refine it in 3 steps.
+
+    Follows the second stage of ComfyUI's MIT two-stage LTX-2.5 I2V template: LTXVLatentUpsampler,
+    the look still put back on frame 0 at full size, stage 1's audio latent, the base distilled model,
+    STAGE2_SIGMAS. The layout guide frames were cropped off after stage 1 (LTXVCropGuides), so stage 2
+    runs without the IC-LoRA and keeps the layout through the upscaled latent itself. The decode nodes
+    are rewired to stage 2's output."""
+    g.update({
+        "70": _node("LatentUpscaleModelLoader", "Load x2 latent upscaler", model_name=m["upscaler"]),
+        "71": _node("LTXVLatentUpsampler", "Upscale latent x2", samples=_link("51", 2), upscale_model=_link("70"),
+                    vae=_link("3")),
+        "72": _node("LTXVImgToVideoInplace", "Look still -> frame 0 (full size)", vae=_link("3"), image=_link("13"),
+                    latent=_link("71"), strength=1.0, bypass=False),
+        "73": _node("LTXVConcatAVLatent", "Join audio+video (stage 2)", video_latent=_link("72"),
+                    audio_latent=_link("50", 1)),
+        "74": _node("ManualSigmas", "Stage 2 sigmas (3 steps)", sigmas=STAGE2_SIGMAS),
+        "75": _node("LTXVDualCFGGuider", "Guider stage 2 (CFG 1)", model=_link("1"), positive=_link("51", 0),
+                    negative=_link("51", 1), video_cfg=1.0, audio_cfg=1.0),
+        "76": _node("SamplerCustomAdvanced", "Sample stage 2", noise=_link(NODES["seed"]), guider=_link("75"),
+                    sampler=_link("41"), sigmas=_link("74"), latent_image=_link("73")),
+        "77": _node("LTXVSeparateAVLatent", "Split audio+video (stage 2)", av_latent=_link("76")),
+    })
+    g["52"]["inputs"]["samples"] = _link("77", 0)
+    g["53"]["inputs"]["samples"] = _link("77", 1)
+    g[NODES["output"]]["inputs"]["filename_prefix"] = g[NODES["output"]]["inputs"]["filename_prefix"].replace(
+        "stage1", "two-stage")
+
+
+def build_two_stage(**kw):
+    """The 1920x1088 graph: stage 1 at 960x544, then stage 2 (for workflows/two_stage_layout_api.json)."""
+    return build_stage1(**{"width": 960, "height": 544, **kw, "stage2": True})
 
 
 # ---------- look still: frame 0 art direction from the playblast's depth ----------
@@ -196,7 +236,8 @@ def stage1_size(width, height):
     return width - width % 32, height - height % 32
 
 
-WORKFLOW_FILES = {"stage1_layout_api.json": build_stage1, "look_still_depth_api.json": build_look_still}
+WORKFLOW_FILES = {"stage1_layout_api.json": build_stage1, "two_stage_layout_api.json": build_two_stage,
+                  "look_still_depth_api.json": build_look_still}
 
 
 def main(out_dir="workflows"):

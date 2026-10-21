@@ -19,7 +19,8 @@ follows that camera move and layout. Real A40 output, stage 1, from <code>exampl
 
 > Status: both pipelines pass on an A40. The look still (Z-Image-Turbo + depth ControlNet) is generated from the
 > layout's own depth, so it lines up box for box, and the stage-1 video render from it keeps both the look and the
-> layout (see [Examples](#examples)). The stage-2 1920×1088 upscale is next. Plan, specs and budget:
+> layout (see [Examples](#examples)). Stage 2 (1920×1088: an x2 latent upscale and 3 refine steps) is built from core nodes and current ComfyUI
+> accepts the graph, but it hasn't been run on the GPU yet. Plan, specs and budget:
 > [docs/PLAN.md](docs/PLAN.md).
 
 ## Try it
@@ -89,7 +90,8 @@ server): `npm run test:e2e` (Playwright; in Chrome the demo clips are also check
 
 `server/` is a small local server that takes the playblast, a look still and a prompt, runs our
 stage-1 workflow ([workflows/stage1_layout_api.json](workflows/stage1_layout_api.json), built from
-ComfyUI core nodes by `server/workflow.py`) through the official
+ComfyUI core nodes by `server/workflow.py`; a 1920×1088 playblast also gets stage 2,
+[workflows/two_stage_layout_api.json](workflows/two_stage_layout_api.json)) through the official
 [Comfy SDK](https://docs.comfy.org/development/api-development/sdks), and returns the clip.
 The SDK talks to Comfy Cloud by default, or to any ComfyUI behind
 [comfy-api-proxy](https://github.com/Comfy-Org/comfy-api-proxy) via `COMFY_BASE_URL`.
@@ -100,6 +102,10 @@ COMFY_API_KEY=comfyui-... python -m server.app                          # Comfy 
 python -m server.app --comfy-url http://127.0.0.1:8189                  # your own ComfyUI + comfy-api-proxy
 COMFY_API_KEY=<proxy token> python -m server.app --comfy-url https://<pod>-8189.proxy.runpod.net   # RunPod
 ```
+
+Before spending GPU time, `python -m server.doctor` checks the Python side and the Comfy target, and with
+`--comfyui http://127.0.0.1:8188` (ComfyUI itself, not the proxy) that every node and model file our workflows
+use is there.
 
 `--cors-origin <origin>` lets a page served from elsewhere (the live link) call the server; `--host 0.0.0.0`
 listens beyond localhost (e.g. on a pod, then use its `https://<pod>-8190.proxy.runpod.net` URL).
@@ -118,14 +124,15 @@ once: every still stays in a strip under the panel, so you can click back to the
 **Render all shots** renders a whole scene: for each shot, in order, it exports the playblast, generates its
 look still (same prompt and seed for every shot, so they share a look) and renders it, then cuts the renders
 together into one sequence, with the layout sequence beside it to compare (`POST /api/stitch`, no re-encode).
-Budget about 2.5–4 minutes per 65-frame shot on an A40. Then press
+Budget about 2.5–4 minutes per 65-frame shot on an A40. While a job runs, the status line names the node
+and sampler step, and **Cancel** stops it on the GPU too (`POST /api/render/<id>/cancel`). Then press
 **Render shot**. **Choose look still…** still takes your own image instead (same framing as frame 0).
 
 Without the server:
 
 ```bash
 python -m server.look web/exports/<shot>_depth.png "prompt" -o look.png        # look still (~1 MP, then playblast size)
-python -m server.render web/exports/<shot>.mp4 look.png "prompt" -o out.mp4    # the clip
+python -m server.render web/exports/<shot>.mp4 look.png "prompt" -o out.mp4    # the clip (1920×1088: + stage 2; --stage1-only to skip)
 python -m server.stitch shot1.mp4 shot2.mp4 shot3.mp4 -o sequence.mp4          # cut renders together
 ```
 

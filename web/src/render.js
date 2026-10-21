@@ -107,6 +107,14 @@ export async function runJob(kind, form, { server = '', fetchFn = fetch, onUpdat
   return state;
 }
 
+/** POST /api/{render|look}/{id}/cancel. Resolves with the job's state; a job that already ended is fine. */
+export async function cancelJob(kind, id, { server = '', fetchFn = fetch } = {}) {
+  const res = await fetchFn(apiUrl(server, `/api/${kind}/${id}/cancel`), { method: 'POST' });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok && res.status !== 409) throw new Error(body.error || `${res.status} ${res.statusText}`);
+  return body;
+}
+
 export const runRender = (form, opts) => runJob('render', form, opts);
 
 /** POST /api/stitch: cut finished renders (clip 'render') or their layout clips ('layout') together, in order. */
@@ -135,9 +143,14 @@ export function serverCommand(pageOrigin, { proxied = false } = {}) {
 export function describeState(s) {
   const secs = s.created ? Math.round(Date.now() / 1000 - s.created) : 0;
   if (s.status === 'queued') return 'Waiting for the GPU…';
-  if (s.stage === 'rendering') return `Rendering ${Math.round((s.progress || 0) * 100)}% (${secs}s)`;
+  if (s.stage === 'rendering') {
+    const step = s.steps ? `, step ${s.step}/${s.steps}` : '';
+    const node = s.node ? ` · ${s.node}${step}` : '';
+    return `Rendering ${Math.round((s.progress || 0) * 100)}%${node} (${secs}s)`;
+  }
   if (s.status === 'running') return `${s.stage[0].toUpperCase()}${s.stage.slice(1)}… (${secs}s)`;
   if (s.status === 'succeeded') return `Done in ${s.seconds}s`;
+  if (s.status === 'cancelled') return 'Cancelled';
   return `Failed: ${s.error}`;
 }
 
@@ -159,6 +172,8 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
   let blast = null; // {mp4, firstFrame, depth, key}
   let rendered = null; // the last render's MP4 blob
   let busy = false;
+  let current = null; // {kind, id} of the job running now, for Cancel
+  let cancelled = false; // stops Render all shots between shots
   const urls = new Map();
   const setUrl = (el, blob) => {
     if (urls.has(el)) URL.revokeObjectURL(urls.get(el));
@@ -264,20 +279,32 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
   async function withBusy(label, work) {
     if (busy) return;
     busy = true;
+    cancelled = false;
+    $('render-cancel').hidden = false;
     refreshHints();
     const status = $('render-status');
     try {
       await work(status, (s) => {
+        if (s.id && s.kind) current = { kind: s.kind, id: s.id };
+        if (cancelled) throw new Error('cancelled');
         status.textContent = `${s.label || label}: ${describeState(s)}`;
         $('render-progress').value = s.status === 'succeeded' ? 1 : s.progress || 0;
       });
     } catch (err) {
-      status.textContent = `${label} failed: ${err.message}`;
+      status.textContent = cancelled ? `${label} cancelled.` : `${label} failed: ${err.message}`;
     } finally {
       busy = false;
+      current = null;
+      $('render-cancel').hidden = true;
       refreshHints();
     }
   }
+
+  $('render-cancel').addEventListener('click', async () => {
+    cancelled = true;
+    $('render-status').textContent = 'Cancelling…';
+    if (current) await cancelJob(current.kind, current.id, { server }).catch(() => {});
+  });
 
   async function checkServer() {
     const mine = ++check;
