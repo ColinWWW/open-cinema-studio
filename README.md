@@ -56,6 +56,12 @@ All from the same plaza layout on an A40, stage 1 (960×576, 65 frames). Click a
 <p align="center"><img src="docs/media/three_looks.gif" width="100%" alt="Top left: the grey plaza layout. The other three: LTX-2.5 renders of the same layout and camera move as a sunny day, a rainy night and a snowy dusk."></p>
 <p align="center"><sub>One layout, three prompts: same blocking and camera, only the look changes (<code>scripts/three_looks.py</code>).</sub></p>
 
+<p align="center"><img src="docs/media/four_moves.gif" width="100%" alt="Four LTX-2.5 renders of the same grey Blocks layout, each with its layout inset in the corner: an orbit around shipping containers on a foggy harbour, a crane up over brutalist blocks in a desert, a sideways truck past concrete blocks in a neon Tokyo parking lot at night, and a dolly into an abandoned warehouse."></p>
+<p align="center"><sub>One layout, four camera moves, four places: orbit, crane up, truck, dolly in, each 97 frames on the A40, with the
+grey layout inset (<code>scripts/four_moves.py</code>). Clips:
+<a href="examples/stage1_harbour_orbit_a40.mp4">harbour orbit</a>, <a href="examples/stage1_desert_crane_up_a40.mp4">desert crane up</a>,
+<a href="examples/stage1_tokyo_truck_a40.mp4">Tokyo truck</a>, <a href="examples/stage1_warehouse_dolly_in_a40.mp4">warehouse dolly in</a>.</sub></p>
+
 - Render from a reference photo instead ([`look_plaza.jpg`](examples/look_plaza.jpg)): [contact sheet](examples/stage1_core_plaza_frames.png)
 - A four-shot sequence from **Render all shots** (dolly in, orbit right, crane up, truck right, cut together):
   [`sequence_plaza_4shots_a40.mp4`](examples/sequence_plaza_4shots_a40.mp4), layout cut
