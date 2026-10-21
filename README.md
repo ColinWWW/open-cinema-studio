@@ -17,6 +17,31 @@ Entry for the [Comfy Open Source Higgsfield Challenge](https://comfy.org/open-so
 <p align="center"><sub>Left: the shot blocked in the browser (grey boxes + a keyed dolly-in). Right: the LTX-2.5 render, which
 follows that camera move and layout. Real A40 output, stage 1, from <code>examples/</code>.</sub></p>
 
+## 60 seconds
+
+- **What it does:** you block out a shot in the browser (grey boxes and a keyed camera path), add one prompt,
+  and get back a cinematic clip that follows that exact camera move and layout, rendered by LTX-2.5 in ComfyUI.
+- **Why it's different:** you set the camera and the layout; the model only paints. The layout clip and its
+  depth drive both the look still (Z-Image-Turbo + depth ControlNet) and the clip (LTX-2.5 + the Layout-to-Render
+  IC-LoRA), so the render lines up box for box instead of reinterpreting your shot. Open weights only.
+- **How to try it:** open the [live page](https://colinwww.github.io/open-cinema-studio/) (Chrome or Edge): it
+  replays a real A40 render on first visit, and **Render…** takes a render server URL or your own Comfy key.
+  No GPU? Run the whole chain locally against the [stand-in ComfyUI](#render-comfy-sdk).
+
+<p align="center">
+  <img src="docs/media/architecture.svg" width="100%" alt="Architecture: the browser blocks the shot in three.js and exports a WebCodecs playblast plus frame 0's depth; the render server (Comfy SDK) or the Comfy Cloud path with your own key sends them to ComfyUI, which paints the look still with Z-Image-Turbo + a depth ControlNet and films the clip with LTX-2.5 + the Layout-to-Render IC-LoRA (stage 1, then stage 2); the MP4 comes back to the page.">
+</p>
+
+**Measured on an A40:**
+
+| Step | Size | Time |
+| --- | --- | --- |
+| Look still (Z-Image-Turbo + depth ControlNet) | about 1 MP | ~11 s warm, ~46 s cold |
+| Stage 1 clip (LTX-2.5 + IC-LoRA) | 960×576, 65 frames | ~170 s |
+| Stage 1 clip | 960×576, 121 frames (5 s) | 257 s |
+| Stage 2 clip (x2 latent upscale + 3 refine steps) | 1920×1088, 97 frames | 373 s |
+
+
 > Status: both pipelines pass on an A40. The look still (Z-Image-Turbo + depth ControlNet) is generated from the
 > layout's own depth, so it lines up box for box, and the stage-1 video render from it keeps both the look and the
 > layout (see [Examples](#examples)). Stage 2 (1920×1088: an x2 latent upscale and 3 refine steps) runs on the

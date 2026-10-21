@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" width="1000" height="470" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">Open Cinema Studio architecture</title>
+  <desc id="d">The browser blocks a shot in three.js and exports a WebCodecs playblast plus frame 0's depth. A render server (Comfy SDK) or the Comfy Cloud path with your own key sends them to ComfyUI, which paints a look still with Z-Image-Turbo and a depth ControlNet, then films the clip with LTX-2.5 and the Layout-to-Render IC-LoRA in stage 1 and stage 2. The MP4 comes back to the page.</desc>
+  <style>
+    .bg { fill: #ffffff; stroke: #d0d7de; }
+    .box { fill: #f6f8fa; stroke: #8c959f; }
+    .gpu { fill: #ddf4ff; stroke: #0969da; }
+    .alt { fill: #f6f8fa; stroke: #8c959f; stroke-dasharray: 6 4; }
+    .h { fill: #1f2328; font-size: 16px; font-weight: 600; }
+    .s { fill: #1f2328; font-size: 13px; }
+    .m { fill: #59636e; font-size: 12px; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .ln { stroke: #59636e; stroke-width: 2; fill: none; }
+    .back { stroke: #1a7f37; stroke-width: 2; fill: none; }
+    .ah { fill: #59636e; }
+    .ahb { fill: #1a7f37; }
+    .lbl { fill: #59636e; font-size: 12px; }
+    .lblb { fill: #1a7f37; font-size: 13px; font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; stroke: #3d444d; }
+      .box, .alt { fill: #151b23; stroke: #656c76; }
+      .gpu { fill: #0c2d4a; stroke: #4493f8; }
+      .h, .s { fill: #f0f6fc; }
+      .m, .lbl { fill: #9198a1; }
+      .ln { stroke: #9198a1; }
+      .ah { fill: #9198a1; }
+      .back { stroke: #3fb950; }
+      .ahb { fill: #3fb950; }
+      .lblb { fill: #3fb950; }
+    }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ahb" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+
+  <rect class="bg" x="1" y="1" width="998" height="468" rx="12"/>
+
+  <!-- 1. Browser -->
+  <rect class="box" x="24" y="40" width="250" height="300" rx="10"/>
+  <text class="h" x="40" y="68">1. Browser</text>
+  <text class="m code" x="40" y="86">web/ (live page, Chrome or Edge)</text>
+  <text class="s" x="40" y="120">three.js blocking</text>
+  <text class="m" x="40" y="138">grey boxes, keyed camera path,</text>
+  <text class="m" x="40" y="154">camera moves, multiple shots</text>
+  <path class="ln" d="M149,166 V192" marker-end="url(#a)"/>
+  <text class="s" x="40" y="214">WebCodecs playblast</text>
+  <text class="m" x="40" y="232">layout clip (MP4)</text>
+  <text class="m" x="40" y="248">+ frame 0's depth (PNG)</text>
+  <text class="m" x="40" y="264">+ prompt</text>
+  <text class="m" x="40" y="300">You set the camera and layout.</text>
+  <text class="m" x="40" y="316">The model only paints.</text>
+
+  <!-- arrows browser -> backends -->
+  <path class="ln" d="M274,150 H346" marker-end="url(#a)"/>
+  <path class="ln" d="M274,250 C310,250 310,272 346,272" marker-end="url(#a)"/>
+
+  <!-- 2a. Render server -->
+  <rect class="box" x="348" y="40" width="250" height="160" rx="10"/>
+  <text class="h" x="364" y="68">2. Render server</text>
+  <text class="m code" x="364" y="86">server/app.py</text>
+  <text class="s" x="364" y="118">Comfy SDK: builds the</text>
+  <text class="s" x="364" y="136">workflow, queues it, polls</text>
+  <text class="m" x="364" y="164">on your GPU box or pod</text>
+  <text class="m" x="364" y="180">(or the No-GPU mock chain)</text>
+
+  <!-- 2b. Comfy Cloud key path -->
+  <rect class="alt" x="348" y="220" width="250" height="120" rx="10"/>
+  <text class="h" x="364" y="248">or: Comfy Cloud, your key</text>
+  <text class="m code" x="364" y="266">web/src/cloud.js</text>
+  <text class="s" x="364" y="294">key stays in your browser;</text>
+  <text class="s" x="364" y="312">usually via the worker/ relay</text>
+
+  <!-- arrows backends -> ComfyUI -->
+  <path class="ln" d="M598,120 H670" marker-end="url(#a)"/>
+  <path class="ln" d="M598,280 H670" marker-end="url(#a)"/>
+
+  <!-- 3. ComfyUI -->
+  <rect class="gpu" x="672" y="40" width="304" height="300" rx="10"/>
+  <text class="h" x="688" y="68">3. ComfyUI (open weights)</text>
+  <rect class="box" x="688" y="84" width="272" height="88" rx="8"/>
+  <text class="s" x="702" y="106" font-weight="600">Look still</text>
+  <text class="m" x="702" y="126">Z-Image-Turbo + depth ControlNet</text>
+  <text class="m" x="702" y="144">paints frame 0 from the layout's depth,</text>
+  <text class="m" x="702" y="160">so it lines up box for box</text>
+  <path class="ln" d="M824,172 V196" marker-end="url(#a)"/>
+  <rect class="box" x="688" y="198" width="272" height="126" rx="8"/>
+  <text class="s" x="702" y="220" font-weight="600">Clip</text>
+  <text class="m" x="702" y="240">LTX-2.5 + Layout-to-Render IC-LoRA</text>
+  <text class="m" x="702" y="258">follows the layout clip's camera</text>
+  <text class="m" x="702" y="274">and takes its look from the still</text>
+  <text class="s" x="702" y="298">Stage 1: 960×576</text>
+  <text class="s" x="702" y="316">Stage 2: 1920×1088 (x2 upscale)</text>
+
+  <!-- 4. back to the page -->
+  <path class="back" d="M824,340 V410 H149 V346" marker-end="url(#b)"/>
+  <text class="lblb" x="486" y="432" text-anchor="middle">4. MP4 (and the look still) back to the page</text>
+</svg>
