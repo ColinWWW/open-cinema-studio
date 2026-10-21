@@ -548,7 +548,7 @@ $('pilot').addEventListener('click', () => setPilot(!pilot));
 $('shot').addEventListener('change', (e) => changeShots((s) => selectShot(s, Number(e.target.value))));
 $('shot-add').addEventListener('click', () => {
   changeShots(addShot);
-  flash(`${scene.shots[scene.shot].name}: a copy of the last shot. Reframe it, or apply a move`);
+  flash(`${scene.shots[scene.shot].name}: a copy of the shot before it. Reframe it, or apply a move`);
 });
 $('shot-del').addEventListener('click', async () => {
   if (await confirmDialog(`Delete "${scene.shots[scene.shot].name}"?`, { ok: 'Delete' })) changeShots(removeShot);

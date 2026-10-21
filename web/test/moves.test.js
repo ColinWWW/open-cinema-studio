@@ -71,3 +71,12 @@ test('far targets (the plaza looks 100 m ahead) get moves sized for a nearby sub
   const b = cameraMove('dolly_in', poseAt(blocksScene().camera.keys, 0), 65).keys;
   assert.ok(len(sub(b[1].position, b[0].position)) > 2);
 });
+
+test('crane down never rises, even from below 0.3 m', () => {
+  for (const y of [1.6, 0.5, 0.3, 0.1, -0.2]) {
+    const keys = cameraMove('crane_down', { position: [0, y, -8], target: [0, 1, 0] }, 65).keys;
+    const end = keys[keys.length - 1].position[1];
+    assert.ok(end <= y, `from y=${y} it ended at ${end}`);
+    assert.ok(end >= Math.min(y, 0.3) - 1e-9, `from y=${y} it went below the floor clamp to ${end}`);
+  }
+});

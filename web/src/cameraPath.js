@@ -103,7 +103,8 @@ export function cameraMove(move, start, frames) {
     case 'crane_up':
       return two([0, 0.4 * r, 0], true);
     case 'crane_down':
-      return two([0, -Math.min(0.4 * r, p[1] - 0.3), 0], true);
+      // down to 0.3 m at most; a camera already below that stays put rather than rising
+      return two([0, -Math.max(0, Math.min(0.4 * r, p[1] - 0.3)), 0], true);
     case 'static':
       return { ease: 'smooth', keys: [{ frame: 0, position: round3(p), target: round3(t) }] };
     default: {
