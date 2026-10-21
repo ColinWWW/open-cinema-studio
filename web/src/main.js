@@ -5,6 +5,7 @@ import { poseAt, removeKey, rescaleKeys, setKey, sortKeys } from './cameraPath.j
 import { ClayWorld, ShiftCamera, createRenderer } from './clay.js';
 import { canExport, exportPlayblast } from './exporter.js';
 import { PRESETS, newId, normalizeScene } from './presets.js';
+import { initRenderPanel } from './render.js';
 import { FRAME_COUNTS, RESOLUTIONS } from './spec.js';
 
 const $ = (id) => document.getElementById(id);
@@ -558,7 +559,7 @@ async function saveToDevServer(name, blob) {
   }
 }
 
-/** Export the playblast. Returns {mp4, firstFrame, saved} (blobs, and dev-server paths when available). */
+/** Export the playblast. Returns {mp4, firstFrame, depth, saved} (blobs, and dev-server paths when available). */
 async function runExport() {
   if (exporting) return null;
   exporting = true;
@@ -581,11 +582,13 @@ async function runExport() {
     const saved = [
       await saveToDevServer(`${stem}.mp4`, result.mp4),
       await saveToDevServer(`${stem}_first.png`, result.firstFrame),
+      await saveToDevServer(`${stem}_depth.png`, result.depth),
       await saveToDevServer(`${stem}.json`, new Blob([JSON.stringify(scene, null, 2)], { type: 'application/json' })),
     ].filter(Boolean);
     const links = [
       [result.mp4, `${stem}.mp4`, 'Download MP4'],
       [result.firstFrame, `${stem}_first.png`, 'Download frame 0'],
+      [result.depth, `${stem}_depth.png`, 'Download depth'],
     ];
     $('export-links').innerHTML = '';
     for (const [blob, name, label] of links) {
@@ -614,7 +617,9 @@ if (!canExport()) {
   $('export').title = 'Needs a browser with WebCodecs (Chrome or Edge)';
 }
 
-// Hook for scripted checks (and the future server bridge).
+initRenderPanel({ getScene: () => scene, exportPlayblast: runExport });
+
+// Hook for scripted checks.
 window.ocs = {
   get scene() {
     return scene;

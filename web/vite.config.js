@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
 const EXPORT_DIR = fileURLToPath(new URL('./exports/', import.meta.url));
+// The render server (server/app.py). Proxied so the page and the API share an origin.
+const RENDER_SERVER = process.env.RENDER_SERVER || 'http://127.0.0.1:8190';
 
 // Dev server only: POST /api/save?name=<file> writes the body to web/exports/, so playblasts land
 // on disk next to the repo without a browser download. The real backend (server/) replaces this.
@@ -36,5 +38,9 @@ function savePlayblast() {
 
 export default defineConfig({
   plugins: [savePlayblast()],
-  server: { port: 5173, strictPort: true },
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: { '/api/render': RENDER_SERVER, '/api/look': RENDER_SERVER, '/api/health': RENDER_SERVER },
+  },
 });

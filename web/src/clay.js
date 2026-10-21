@@ -66,7 +66,8 @@ export class ClayWorld {
   constructor() {
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog(new THREE.Color(SKY_GREY, SKY_GREY, SKY_GREY), 8, 38);
-    this.scene.add(makeSky());
+    this.sky = makeSky();
+    this.scene.add(this.sky);
 
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2),

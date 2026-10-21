@@ -1,16 +1,62 @@
 // Deterministic playblast: step the shot exactly 1/fps per frame, render each frame at the output
 // size, and encode to H.264 MP4 in the browser with WebCodecs (no MediaRecorder, no real-time capture).
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
+import * as THREE from 'three';
 import { poseAt } from './cameraPath.js';
 import { createRenderer } from './clay.js';
+import { depthToGray } from './depth.js';
 import { checkOutput } from './spec.js';
+
+// View-space depth per pixel, for the look still's depth map (see depth.js).
+const DEPTH_MATERIAL = new THREE.ShaderMaterial({
+  side: THREE.DoubleSide,
+  vertexShader: /* glsl */ `
+    varying float vDepth;
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      vDepth = -mv.z;
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: /* glsl */ `
+    varying float vDepth;
+    void main() { gl_FragColor = vec4(vDepth, 0.0, 0.0, 1.0); }`,
+});
+
+/** Render the shot camera's current view as a depth PNG (near = white, sky = black). */
+async function renderDepth(renderer, world, width, height) {
+  const target = new THREE.WebGLRenderTarget(width, height, { type: THREE.FloatType });
+  const clear = renderer.getClearColor(new THREE.Color());
+  const clearAlpha = renderer.getClearAlpha();
+  world.sky.visible = false;
+  world.scene.overrideMaterial = DEPTH_MATERIAL;
+  try {
+    renderer.setClearColor(0x000000, 0);
+    renderer.setRenderTarget(target);
+    renderer.render(world.scene, world.shotCam);
+    const rgba = new Float32Array(width * height * 4);
+    renderer.readRenderTargetPixels(target, 0, 0, width, height, rgba);
+    const depth = new Float32Array(width * height);
+    for (let i = 0; i < depth.length; i++) depth[i] = rgba[i * 4];
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').putImageData(new ImageData(depthToGray(depth, width, height), width, height), 0, 0);
+    return await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  } finally {
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(clear, clearAlpha);
+    world.scene.overrideMaterial = null;
+    world.sky.visible = true;
+    target.dispose();
+  }
+}
 
 export function canExport() {
   return typeof VideoEncoder !== 'undefined' && typeof VideoFrame !== 'undefined';
 }
 
 /**
- * Render the scene's shot to an MP4 plus a PNG of frame 0.
+ * Render the scene's shot to an MP4 plus PNGs of frame 0 and its depth map.
  * `world` is a ClayWorld already synced to `scene`; editor helpers are hidden while rendering.
  */
 export async function exportPlayblast(world, scene, { onProgress } = {}) {
@@ -47,11 +93,16 @@ export async function exportPlayblast(world, scene, { onProgress } = {}) {
   const helpersVisible = world.helpers.visible;
   world.helpers.visible = false;
   let firstFrame = null;
+  let depth = null;
   try {
     for (let i = 0; i < frames; i++) {
       world.applyShot(scene.camera, poseAt(scene.camera.keys, i, scene.camera.ease), width / height);
       renderer.render(world.scene, world.shotCam);
-      if (i === 0) firstFrame = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (i === 0) {
+        firstFrame = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        depth = await renderDepth(renderer, world, width, height);
+        renderer.render(world.scene, world.shotCam); // the canvas again, for the video frame below
+      }
       const frame = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) });
       encoder.encode(frame, { keyFrame: i % fps === 0 });
       frame.close();
@@ -67,5 +118,5 @@ export async function exportPlayblast(world, scene, { onProgress } = {}) {
     renderer.dispose();
     world.helpers.visible = helpersVisible;
   }
-  return { mp4: new Blob([muxer.target.buffer], { type: 'video/mp4' }), firstFrame };
+  return { mp4: new Blob([muxer.target.buffer], { type: 'video/mp4' }), firstFrame, depth };
 }

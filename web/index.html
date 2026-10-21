@@ -18,7 +18,8 @@
       <label>Size <select id="resolution"></select></label>
       <label>Frames <select id="frames"></select></label>
       <span class="muted">24 fps</span>
-      <button id="export" class="primary">Export playblast</button>
+      <button id="export">Export playblast</button>
+      <button id="render-open" class="primary" title="Render the shot with LTX-2.5 through ComfyUI">Render…</button>
     </header>
 
     <main>
@@ -94,6 +95,46 @@
       <progress id="export-progress" max="1" value="0"></progress>
       <div id="export-links"></div>
       <button id="export-close">Close</button>
+    </div>
+
+    <div id="render-panel" hidden>
+      <div class="render-head">
+        <strong>Render</strong>
+        <span id="render-server" class="muted"></span>
+        <button id="render-close">Close</button>
+      </div>
+      <div class="render-inputs">
+        <div class="render-look">
+          <div class="thumbs">
+            <figure><img id="render-frame0" alt="" /><figcaption>Playblast frame 0</figcaption></figure>
+            <figure><img id="render-depth" alt="" /><figcaption>Depth (frame 0)</figcaption></figure>
+            <figure><img id="render-look-img" alt="" /><figcaption>Look still</figcaption></figure>
+          </div>
+          <div class="render-row">
+            <button id="render-generate" title="Make the look still from frame 0's depth and the prompt (Z-Image-Turbo + depth ControlNet), so it matches the layout box for box" disabled>Generate look still</button>
+            <label class="file-btn">Choose look still…<input id="render-look" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label>
+          </div>
+        </div>
+        <div class="render-text">
+          <label for="render-prompt">Prompt</label>
+          <textarea id="render-prompt" rows="4" placeholder="One or two sentences describing the finished shot (used for the look still and the render)."></textarea>
+          <div class="render-row">
+            <label>Seed <input id="render-seed" type="number" value="42" step="1" /></label>
+            <button id="render-go" class="primary" disabled>Render shot</button>
+          </div>
+          <p id="render-hints" class="hint"></p>
+        </div>
+      </div>
+      <div id="render-status" class="muted">Exports the playblast if the scene changed, then renders stage 1 (about 3 minutes on an A40).</div>
+      <progress id="render-progress" max="1" value="0"></progress>
+      <div class="render-videos">
+        <figure><video id="render-blast" muted loop playsinline></video><figcaption>Playblast</figcaption></figure>
+        <figure><video id="render-result" muted loop playsinline></video><figcaption>Render</figcaption></figure>
+      </div>
+      <div class="render-row">
+        <button id="render-play">Play both</button>
+        <a id="render-download" hidden>Download render</a>
+      </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

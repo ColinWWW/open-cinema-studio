@@ -1,0 +1,6 @@
+# Render server (Python 3.10+)
+comfy-sdk>=0.5
+aiohttp>=3.9
+imageio-ffmpeg>=0.5   # only for `python -m server.render` (reads the clip's size)
+# Self-hosted ComfyUI (RunPod, local mock): serves the Comfy API v2 the SDK talks to
+comfy-api-proxy>=0.1.6
