@@ -727,10 +727,7 @@ $('prev-key').addEventListener('click', () => jumpKey(-1));
 $('next-key').addEventListener('click', () => jumpKey(1));
 
 window.addEventListener('keydown', (e) => {
-  // Typing and dialogs keep their keys, and Space presses a focused button or link. Other keys still work there:
-  // a button keeps focus after a mouse click, and W/E/R or Delete shouldn't stop working because of it.
-  if (e.target.closest?.('input, select, textarea, [role=dialog], [role=alertdialog]') || exporting) return;
-  if (e.key === ' ' && e.target.closest?.('button, a[href], summary')) return;
+  if (e.target.closest?.('input, select, textarea, [role=dialog], [role=alertdialog]') || exporting) return; // typing and dialogs keep their keys
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === 'd') {
     e.preventDefault();
@@ -746,6 +743,9 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'k' && e.shiftKey) keySelected(); // Shift+K: key the selected stand-in
   else if (k === 'k') keyCamera();
   else if (k === ' ') {
+    // Space presses a focused button or link. Other shortcuts still work there: a button keeps focus after a
+    // mouse click, and W/E/R or Delete shouldn't stop working because of it.
+    if (e.target.closest?.('button, a[href], summary')) return;
     e.preventDefault();
     togglePlay();
   } else if (k === ',') setFrame(frame - 1);
