@@ -3,7 +3,7 @@
     COMFY_BASE_URL=http://127.0.0.1:8189 python -m server.app      # self-hosted ComfyUI (proxy)
     COMFY_API_KEY=comfyui-... python -m server.app                 # Comfy Cloud
 
-Routes (the Vite dev server proxies /api/render, /api/look and /api/health here):
+Routes (the Vite dev server proxies them here):
     GET  /api/health              which Comfy target the SDK is pointed at
     POST /api/render              multipart: layout (mp4), look (image), prompt, width, height, frames, seed?
                                   -> 202 {"id"}
@@ -13,6 +13,9 @@ Routes (the Vite dev server proxies /api/render, /api/look and /api/health here)
                                   strength? -> 202 {"id"}   (depth-controlled look still, Z-Image-Turbo)
     GET  /api/look/{id}           same status fields as a render
     GET  /api/look/{id}/image     the finished PNG, at width x height
+    POST /api/stitch              JSON {"renders": [id, ...], "clip": "render"|"layout"} -> 201, a finished
+                                  "sequence" job: those renders (or their layout clips) cut together in order
+    GET  /api/sequence/{id}/video the joined MP4
 
 A page served from another origin (e.g. GitHub Pages) can call the server when it's started with
 --cors-origin https://colinwww.github.io: CORS headers (and preflight answers) go to that origin only.
@@ -32,6 +35,7 @@ from aiohttp import web
 from comfy_sdk import AsyncComfy, ComfyError
 
 from .render import png_size, prompt_warnings, render, render_look, tolerate_head_rewrites
+from .stitch import stitch
 from .workflow import check_dims, look_size
 
 RENDERS = Path(__file__).resolve().parent / "renders"
@@ -43,7 +47,9 @@ SERVICE = web.AppKey("service", object)
 class RenderService:
     """Render and look-still jobs share one queue (one GPU) and one id space."""
 
-    RESULTS = {"render": ("render.mp4", "video"), "look": ("look.png", "image")}
+    RESULTS = {"render": ("render.mp4", "video"), "look": ("look.png", "image"),
+               "sequence": ("sequence.mp4", "video")}
+    MAX_SHOTS = 24
 
     def __init__(self, client, renders_dir=RENDERS):
         self.client = client
@@ -77,6 +83,7 @@ class RenderService:
     async def start(self, layout_bytes, look_bytes, look_ext, prompt, width, height, frames, seed):
         check_dims(width, height, frames)
         rid, folder = self._new("render", prompt)
+        self.jobs[rid].update(width=width, height=height, frames=frames)
         (folder / "layout.mp4").write_bytes(layout_bytes)
         (folder / f"look{look_ext}").write_bytes(look_bytes)
         self._spawn(rid, lambda on_progress: render(
@@ -91,6 +98,34 @@ class RenderService:
         self._spawn(rid, lambda on_progress: render_look(
             self.client, folder / "depth.png", prompt, width=width, height=height, seed=seed, strength=strength,
             out=self.result_path(rid), on_progress=on_progress))
+        return rid
+
+    async def stitch(self, ids, clip="render"):
+        """Cut finished renders (or the layout clips they were made from) together, in order."""
+        if clip not in ("render", "layout"):
+            raise ValueError('clip must be "render" or "layout"')
+        if not 2 <= len(ids) <= self.MAX_SHOTS:
+            raise ValueError(f"send 2 to {self.MAX_SHOTS} render ids")
+        jobs = []
+        for i in ids:
+            job = self.jobs.get(i) if isinstance(i, str) else None
+            if not job or job["kind"] != "render" or job["status"] != "succeeded":
+                raise ValueError(f"{i!r} is not a finished render")
+            jobs.append(job)
+        if len({(j["width"], j["height"]) for j in jobs}) > 1:
+            raise ValueError("all shots must have the same size")
+        rid, folder = self._new("sequence", "sequence")
+        job = self.jobs[rid]
+        job.update(status="running", stage="joining", renders=list(ids), clip=clip,
+                   frames=sum(j["frames"] for j in jobs), warnings=[])
+        t0 = time.time()
+        try:
+            name = "render.mp4" if clip == "render" else "layout.mp4"
+            await stitch([j["_folder"] / name for j in jobs], self.result_path(rid))
+            job.update(status="succeeded", stage="done", progress=1.0)
+        except RuntimeError as e:
+            job.update(status="failed", stage="failed", error=str(e))
+        job["seconds"] = round(time.time() - t0, 1)
         return rid
 
     def _spawn(self, rid, run):
@@ -183,6 +218,19 @@ async def create_look(request):
     return web.json_response(svc.public(rid), status=202)
 
 
+async def create_sequence(request):
+    svc = request.app[SERVICE]
+    try:
+        body = await request.json()
+        if not isinstance(body, dict) or not isinstance(body.get("renders"), list):
+            raise ValueError('send JSON {"renders": [id, ...]}')
+        rid = await svc.stitch(body["renders"], body.get("clip", "render"))
+    except ValueError as e:  # also bad JSON
+        return web.json_response({"error": str(e)}, status=400)
+    out = svc.public(rid)
+    return web.json_response(out, status=201 if out["status"] == "succeeded" else 500)
+
+
 async def status(request):
     svc = request.app[SERVICE]
     rid = request.match_info["id"]
@@ -197,7 +245,7 @@ async def result(request):
     job = svc.jobs.get(rid)
     if not job or job["kind"] != request.match_info["kind"] or job["status"] != "succeeded":
         return web.json_response({"error": "no result yet"}, status=404)
-    mime = "video/mp4" if job["kind"] == "render" else "image/png"
+    mime = "image/png" if job["kind"] == "look" else "video/mp4"
     return web.FileResponse(svc.result_path(rid), headers={"Content-Type": mime})
 
 
@@ -248,8 +296,9 @@ def make_app(client, renders_dir=RENDERS, cors_origin=None):
         web.get("/api/health", health),
         web.post("/api/render", create),
         web.post("/api/look", create_look),
-        web.get(r"/api/{kind:render|look}/{id}", status),
-        web.get(r"/api/{kind:render}/{id}/video", result),
+        web.post("/api/stitch", create_sequence),
+        web.get(r"/api/{kind:render|look|sequence}/{id}", status),
+        web.get(r"/api/{kind:render|sequence}/{id}/video", result),
         web.get(r"/api/{kind:look}/{id}/image", result),
     ])
     return app
