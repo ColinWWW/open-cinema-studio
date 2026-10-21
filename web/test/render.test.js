@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   apiUrl, aspectWarning, checkHealth, describeState, loadServer, lookForm, normalizeServer, promptWarnings, renderForm,
-  cancelJob, fetchBlob, parseSeed, runJob, runRender, saveServer, serverCommand, stitchShots,
+  cancelJob, fetchBlob, MAX_SEQUENCE_SHOTS, parseSeed, renderAllBlock, renderShots, runJob, runRender, saveServer,
+  serverCommand, stitchShots,
 } from '../src/render.js';
 
 test('promptWarnings flags empty prompts and layout words', () => {
@@ -247,4 +248,50 @@ test('parseSeed keeps 0 and falls back to 42 for anything else', () => {
   assert.equal(parseSeed('0'), 0);
   assert.equal(parseSeed('7'), 7);
   for (const bad of ['', '  ', 'abc', '-1', '1.5', undefined]) assert.equal(parseSeed(bad), 42);
+});
+
+test('renderAllBlock stops Render all over the 24 shots /api/stitch accepts, and says why', () => {
+  assert.equal(MAX_SEQUENCE_SHOTS, 24);
+  assert.equal(renderAllBlock(2, 'server'), null);
+  assert.equal(renderAllBlock(24, 'server'), null);
+  assert.match(renderAllBlock(25, 'server'), /at most 24 shots.*remove 1/);
+  assert.match(renderAllBlock(30, 'server'), /remove 6/);
+  assert.match(renderAllBlock(1, 'server'), /Add shots/);
+  assert.match(renderAllBlock(3, 'cloud'), /render server/);
+});
+
+test('renderShots uses the seed the run began with for every look and render', async () => {
+  const posted = [];
+  let n = 0;
+  const fetchFn = async (url, opts) => {
+    if (opts?.method === 'POST') {
+      posted.push([url, opts.body.get('seed')]);
+      const id = `j${++n}`;
+      return reply(url === '/api/look' ? { id, status: 'succeeded', image_url: `/api/look/${id}/image` }
+        : { id, status: 'succeeded', video_url: `/api/render/${id}/video` }, 202);
+    }
+    return { ok: true, status: 200, blob: async () => new Blob(['png']) };
+  };
+  let typed = 7; // what the seed field says; a real run reads it once, so later edits don't matter
+  const looks = [];
+  const ids = await renderShots(2, {
+    prompt: 'a plaza', seed: typed, fetchFn, sleep: async () => {},
+    prepare: async (i) => {
+      typed = 99;
+      return { stem: `shot${i + 1}`, depth: new Blob(['d']), mp4: new Blob(['m']), output: { width: 960, height: 576, frames: 65 } };
+    },
+    onLook: (i, still, shot) => looks.push([i, shot.stem]),
+  });
+  assert.deepEqual(ids, ['j2', 'j4']);
+  assert.deepEqual(posted, [['/api/look', '7'], ['/api/render', '7'], ['/api/look', '7'], ['/api/render', '7']]);
+  assert.deepEqual(looks, [[0, 'shot1'], [1, 'shot2']]);
+});
+
+test('describeState uses the server-side elapsed time, not this browser\'s clock', () => {
+  const created = Date.now() / 1000 - 3600; // a server clock an hour ahead of ours would make this look an hour old
+  assert.match(describeState({ status: 'running', stage: 'uploading', created, elapsed: 12.4 }), /\(12s\)$/);
+  assert.match(describeState({ status: 'running', stage: 'rendering', progress: 0.1, created, elapsed: 61 }), /\(61s\)$/);
+  assert.match(describeState({ status: 'running', stage: 'uploading', elapsed: 0 }), /\(0s\)$/);
+  // Comfy Cloud states carry no elapsed: fall back to created
+  assert.match(describeState({ status: 'running', stage: 'uploading', created: Date.now() / 1000 - 5 }), /\(5s\)$/);
 });

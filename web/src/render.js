@@ -189,6 +189,42 @@ export async function stitchShots(ids, { server = '', clip = 'render', fetchFn =
   return seq;
 }
 
+/** /api/stitch joins at most this many renders (RenderService.MAX_SHOTS in server/app.py). */
+export const MAX_SEQUENCE_SHOTS = 24;
+
+/** Why "Render all shots" can't run for this many shots on this target, or null if it can. */
+export function renderAllBlock(shots, target) {
+  if (target === 'cloud') return 'Needs the render server (it cuts the shots together)';
+  if (shots < 2) return 'Add shots (Shots > + Shot) to render a sequence';
+  if (shots > MAX_SEQUENCE_SHOTS) {
+    return `The render server joins at most ${MAX_SEQUENCE_SHOTS} shots into a sequence: remove ${shots - MAX_SEQUENCE_SHOTS} to render this one`;
+  }
+  return null;
+}
+
+/**
+ * A look still then a render for each of `count` shots, in order, all with the one `seed` the run began with.
+ * `prepare(i)` shows shot i and resolves with {stem, depth, mp4, output}; `onLook(i, still, shot)` gets each
+ * look still. Resolves with the render ids, ready for stitchShots.
+ */
+export async function renderShots(count, { prompt, seed, prepare, onLook, onUpdate, server = '', fetchFn = fetch, signal, sleep, pollMs } = {}) {
+  const opts = { server, fetchFn, signal, sleep, pollMs };
+  const ids = [];
+  for (let i = 0; i < count; i++) {
+    const shot = await prepare(i);
+    const label = `Shot ${i + 1}/${count}`;
+    const lookJob = await runJob('look', lookForm({ depth: shot.depth, prompt, output: shot.output, seed }), {
+      ...opts, onUpdate: (s) => onUpdate?.({ ...s, label: `${label} look still` }),
+    });
+    const still = await fetchBlob(server, lookJob.image_url, { fetchFn });
+    onLook?.(i, still, shot);
+    const form = renderForm({ mp4: shot.mp4, look: still, lookName: `${shot.stem}_look.png`, prompt, output: shot.output, seed });
+    const final = await runRender(form, { ...opts, onUpdate: (s) => onUpdate?.({ ...s, label: `${label} render` }) });
+    ids.push(final.id);
+  }
+  return ids;
+}
+
 /** GET /api/health on the render server. Resolves with {ok, target}; throws if nothing (or not our server) answers. */
 export async function checkHealth(server, { fetchFn = fetch, timeoutMs = 5000 } = {}) {
   const signal = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(timeoutMs) : undefined;
@@ -202,8 +238,9 @@ export function serverCommand(pageOrigin, { proxied = false } = {}) {
   return proxied ? 'python -m server.app' : `python -m server.app --cors-origin ${pageOrigin}`;
 }
 
+/** One status line for a job state. Elapsed time is the server's `elapsed` when given, as the two clocks may differ. */
 export function describeState(s) {
-  const secs = s.created ? Math.round(Date.now() / 1000 - s.created) : 0;
+  const secs = Math.round(s.elapsed ?? (s.created ? Date.now() / 1000 - s.created : 0));
   if (s.status === 'queued') return 'Waiting for the GPU…';
   if (s.stage === 'rendering') {
     const step = s.steps ? `, step ${s.step}/${s.steps}` : '';
@@ -282,10 +319,10 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     $('render-generate').disabled = busy || demoMode || noPrompt;
     $('render-variants-go').disabled = busy || demoMode || noPrompt;
     const shots = getScene().shots.length;
-    $('render-all').disabled = busy || demoMode || noPrompt || shots < 2 || target === 'cloud';
+    const allBlock = renderAllBlock(shots, target);
+    $('render-all').disabled = busy || demoMode || noPrompt || !!allBlock;
     $('render-all').textContent = shots < 2 ? 'Render all shots' : `Render all ${shots} shots`;
-    $('render-all').title = target === 'cloud' ? 'Needs the render server (it cuts the shots together)'
-      : shots < 2 ? 'Add shots (Shots > + Shot) to render a sequence' : $('render-all').dataset.title;
+    $('render-all').title = allBlock || $('render-all').dataset.title;
     if (demoMode) {
       $('render-hints').textContent = target === 'cloud'
         ? 'Add your Comfy API key to generate look stills and render your own shot.'
@@ -595,22 +632,22 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
       for (const id of ['render-download', 'render-download-layout']) $(id).hidden = true;
       const prompt = $('render-prompt').value;
       const n = getScene().shots.length;
-      const ids = [];
-      for (let i = 0; i < n; i++) {
-        const stem = showShot(i);
-        const label = `Shot ${i + 1}/${n}`;
-        const { depth, mp4 } = await currentBlast(status);
-        const scene = getScene();
-        const lookJob = await runJob('look', lookForm({ depth, prompt, output: scene.output, seed: seed() }), {
-          server, signal, onUpdate: (s) => onUpdate({ ...s, label: `${label} look still` }),
-        });
-        const still = await fetchBlob(server, lookJob.image_url);
-        addStill({ blob: still, name: `${stem}_look.png`, width: scene.output.width, height: scene.output.height, key: blast.key, seed: seed(), prompt, caption: `shot ${i + 1}` });
-        setLook(still, `${stem}_look.png`, scene.output.width, scene.output.height, blast.key);
-        const form = renderForm({ mp4, look: still, lookName: `${stem}_look.png`, prompt, output: scene.output, seed: seed() });
-        const final = await runRender(form, { server, signal, onUpdate: (s) => onUpdate({ ...s, label: `${label} render` }) });
-        ids.push(final.id);
-      }
+      const block = renderAllBlock(n, target); // checked before any GPU work, not by /api/stitch at the end
+      if (block) throw new Error(block);
+      const runSeed = seed(); // every shot uses the seed the run began with, even if the field is edited meanwhile
+      const ids = await renderShots(n, {
+        prompt, seed: runSeed, server, signal, onUpdate,
+        prepare: async (i) => {
+          const stem = showShot(i);
+          const { depth, mp4 } = await currentBlast(status);
+          return { stem, depth, mp4, output: getScene().output, key: blast.key };
+        },
+        onLook: (i, still, shot) => {
+          const name = `${shot.stem}_look.png`;
+          addStill({ blob: still, name, width: shot.output.width, height: shot.output.height, key: shot.key, seed: runSeed, prompt, caption: `shot ${i + 1} · seed ${runSeed}` });
+          setLook(still, name, shot.output.width, shot.output.height, shot.key);
+        },
+      });
       status.textContent = 'Cutting the shots together…';
       const [seq, layout] = await Promise.all([stitchShots(ids, { server }), stitchShots(ids, { server, clip: 'layout' })]);
       const name = (getScene().name || 'scene').replace(/[^\w.-]+/g, '_');
