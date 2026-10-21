@@ -4,27 +4,55 @@
 #
 # Start it every time you start a pod:
 #   nohup bash /workspace/reshoot/scripts/idle_shutdown.sh > /workspace/idle_shutdown.log 2>&1 &
-# Options (env): IDLE_MIN=20 MAX_HOURS=4 COMFY=http://127.0.0.1:8188
+# Options (env): IDLE_MIN=20 MAX_HOURS=4 COMFY=http://127.0.0.1:8188 BUSY_FILE=/tmp/reshoot.busy
 set -uo pipefail
 
 IDLE_MIN="${IDLE_MIN:-20}"
 MAX_HOURS="${MAX_HOURS:-4}"
 COMFY="${COMFY:-http://127.0.0.1:8188}"
+BUSY_FILE="${BUSY_FILE:-/tmp/reshoot.busy}"
 
-if ! command -v runpodctl >/dev/null || [[ -z "${RUNPOD_POD_ID:-}" ]]; then
-  echo "!! runpodctl or RUNPOD_POD_ID missing: budget guard is NOT active" >&2
+if [[ -z "${RUNPOD_POD_ID:-}" ]]; then
+  echo "!! RUNPOD_POD_ID missing: budget guard is NOT active" >&2
+  exit 1
+fi
+if [[ -z "${RUNPOD_API_KEY:-}" ]] && ! command -v runpodctl >/dev/null; then
+  echo "!! neither RUNPOD_API_KEY nor runpodctl available: budget guard is NOT active" >&2
   exit 1
 fi
 
+# Terminate (not stop): pods with a network volume can only be terminated, and /workspace survives.
+# runpodctl is injected a few seconds after the container starts and is the v1 CLI (`remove pod`);
+# the pod's RUNPOD_API_KEY gets 403 from the REST API, so REST is only a last resort.
+terminate_pod() {
+  if command -v runpodctl >/dev/null; then
+    runpodctl remove pod "$RUNPOD_POD_ID" && return 0
+    runpodctl pod delete "$RUNPOD_POD_ID" && return 0
+  fi
+  if [[ -n "${RUNPOD_API_KEY:-}" ]]; then
+    local code
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X DELETE \
+      -H "Authorization: Bearer $RUNPOD_API_KEY" "https://rest.runpod.io/v1/pods/$RUNPOD_POD_ID")"
+    echo "$(date) REST terminate -> HTTP $code"
+    [[ "$code" == 2* ]] && return 0
+  fi
+  return 1
+}
+
 shutdown_pod() {
   echo "$(date) shutting down: $1"
-  # Pods with a network volume can't be stopped, only terminated; fall back to stop otherwise.
-  runpodctl remove pod "$RUNPOD_POD_ID" || runpodctl stop pod "$RUNPOD_POD_ID"
-  exit 0
+  # Keep retrying until the pod disappears; never exit while it's still billing.
+  until terminate_pod; do
+    echo "$(date) terminate failed, retrying in 30s" >&2
+    sleep 30
+  done
+  sleep infinity
 }
 
 busy() {
   local q
+  # Long jobs outside ComfyUI (setup_pod.sh downloads) hold this file to count as busy.
+  [[ -e "$BUSY_FILE" ]] && return 0
   q="$(curl -s --max-time 5 "$COMFY/queue")" || return 1
   python3 -c 'import json,sys; d=json.loads(sys.argv[1]); sys.exit(0 if d["queue_running"] or d["queue_pending"] else 1)' "$q" 2>/dev/null
 }

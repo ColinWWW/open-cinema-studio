@@ -14,6 +14,11 @@ outputs/
 
 # Third-party reference photos (not ours to redistribute)
 examples/ref_street*
+# ...and renders made from them
+examples/gonogo_stage1_street*
 
 # Blocking tool playblasts written by the dev server
 web/exports/
+
+# Render server outputs
+server/renders/
