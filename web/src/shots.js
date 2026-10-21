@@ -36,9 +36,10 @@ export function moveShot(scene, i, dir) {
   return selectShot(scene, scene.shot === i ? j : scene.shot === j ? i : scene.shot);
 }
 
-/** All shots share the clip length: stretch every shot's keys when it changes. */
+/** All shots share the clip length: stretch every shot's camera keys, and the moving stand-ins' keys, when it changes. */
 export function rescaleShots(scene, from, to) {
   for (const s of scene.shots) s.camera.keys = rescaleKeys(s.camera.keys, from, to);
+  for (const o of scene.objects || []) if (o.keys) o.keys = rescaleKeys(o.keys, from, to);
   return scene;
 }
 

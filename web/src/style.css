@@ -87,6 +87,7 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
 #scrub input { width: 100%; margin: 0; accent-color: var(--accent); }
 #key-marks { position: absolute; left: 8px; right: 8px; top: 0; height: 8px; pointer-events: none; z-index: 1; }
 #key-marks span { position: absolute; width: 8px; height: 8px; margin-left: -4px; background: var(--key); transform: rotate(45deg); }
+#key-marks span.obj { top: 10px; background: #4cc9f0; } /* the selected moving stand-in's keys, below the camera's */
 #frame-label { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
 
 #export-panel {

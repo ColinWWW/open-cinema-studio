@@ -2,6 +2,7 @@
 // Shading matches scripts/make_test_layout.py: value = grey * (0.45 + 0.55 * lambert * lit),
 // with colour management off so greys go to the screen untouched.
 import * as THREE from 'three';
+import { isAnimated, objectPoseAt } from './objectPath.js';
 
 THREE.ColorManagement.enabled = false;
 
@@ -103,8 +104,8 @@ export class ClayWorld {
     this.scene.fog.far = far;
   }
 
-  /** Create, update and remove meshes so they match the scene's object list. */
-  syncObjects(list) {
+  /** Create, update and remove meshes so they match the scene's object list, posed on `frame`. */
+  syncObjects(list, frame = 0) {
     const seen = new Set();
     for (const obj of list) {
       seen.add(obj.id);
@@ -120,7 +121,7 @@ export class ClayWorld {
         this.meshes.set(obj.id, mesh);
         this.objects.add(mesh);
       }
-      this.applyObject(mesh, obj);
+      this.applyObject(mesh, obj, frame);
     }
     for (const [id, mesh] of this.meshes) {
       if (!seen.has(id)) {
@@ -129,20 +130,31 @@ export class ClayWorld {
         this.meshes.delete(id);
       }
     }
-    this.fitShadow();
+    this.fitShadow(list);
   }
 
-  applyObject(mesh, obj) {
-    mesh.position.fromArray(obj.position);
-    mesh.rotation.set(...obj.rotation);
+  /** Place a mesh at its object's pose on `frame` (moving stand-ins follow their keys; see objectPath.js). */
+  applyObject(mesh, obj, frame = 0) {
+    const { position, rotation } = objectPoseAt(obj, frame);
+    mesh.position.fromArray(position);
+    mesh.rotation.set(...rotation);
     mesh.scale.fromArray(obj.scale);
     mesh.material.color.setRGB(obj.grey, obj.grey, obj.grey);
   }
 
-  /** Point the sun's shadow camera at the objects' bounding sphere. */
-  fitShadow() {
+  /** Put every moving stand-in where it is on `frame` (still ones never move, so they're skipped). */
+  poseObjects(list, frame) {
+    for (const obj of list) {
+      const mesh = isAnimated(obj) && this.meshes.get(obj.id);
+      if (mesh) this.applyObject(mesh, obj, frame);
+    }
+  }
+
+  /** Point the sun's shadow camera at the objects' bounding sphere, including everywhere a moving one goes. */
+  fitShadow(list = []) {
     const box = new THREE.Box3();
     for (const mesh of this.meshes.values()) box.expandByObject(mesh);
+    for (const obj of list) for (const k of isAnimated(obj) ? obj.keys : []) box.expandByPoint(new THREE.Vector3().fromArray(k.position));
     const sphere = box.isEmpty() ? new THREE.Sphere(new THREE.Vector3(), 10) : box.getBoundingSphere(new THREE.Sphere());
     const r = Math.max(sphere.radius, 5) * 1.1;
     this.sun.target.position.copy(sphere.center);

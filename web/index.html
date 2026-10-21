@@ -170,6 +170,11 @@
             <div class="xyz"><span>Size</span><input data-field="scale" data-i="0" type="number" step="0.1" min="0.01" aria-label="Size X" /><input data-field="scale" data-i="1" type="number" step="0.1" min="0.01" aria-label="Size Y" /><input data-field="scale" data-i="2" type="number" step="0.1" min="0.01" aria-label="Size Z" /></div>
             <label class="wide">Turn (°) <input id="obj-roty" type="number" step="5" /></label>
             <label class="wide">Grey <input id="obj-grey" type="range" min="0.3" max="1" step="0.01" /></label>
+            <div class="row">
+              <button id="obj-key" title="Shift+K: make it move">◆ Key move</button>
+              <button id="obj-key-del" title="Remove its key on this frame" disabled>✕ Key</button>
+            </div>
+            <p id="obj-motion" class="hint"></p>
           </div>
         </section>
 
@@ -204,7 +209,7 @@
 
         <section class="hint">
           <h2>Keys</h2>
-          <p><kbd>W</kbd>/<kbd>E</kbd>/<kbd>R</kbd> move/rotate/scale · <kbd>Del</kbd> delete · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate · <kbd>C</kbd> shot camera · <kbd>K</kbd> key camera · <kbd>Space</kbd> play · <kbd>,</kbd>/<kbd>.</kbd> step</p>
+          <p><kbd>W</kbd>/<kbd>E</kbd>/<kbd>R</kbd> move/rotate/scale · <kbd>Del</kbd> delete · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate · <kbd>C</kbd> shot camera · <kbd>K</kbd> key camera · <kbd>Shift</kbd>+<kbd>K</kbd> key the selected object (it moves) · <kbd>Space</kbd> play · <kbd>,</kbd>/<kbd>.</kbd> step</p>
           <p>Left-drag orbit · right-drag pan · wheel zoom</p>
         </section>
       </aside>

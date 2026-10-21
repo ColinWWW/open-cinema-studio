@@ -1,6 +1,8 @@
 // Starter scenes. "blocks" and "plaza" reproduce scripts/make_test_layout.py, which uses
 // x-right-when-looking-down-+z; three.js is the mirror of that, so x is negated here.
 
+import { normalizeObjectKeys, objectPoseAt } from './objectPath.js';
+
 const DEFAULT_OUTPUT = { width: 960, height: 576, frames: 65, fps: 24 };
 
 let nextId = 1;
@@ -131,15 +133,19 @@ export function normalizeScene(data) {
   const types = ['box', 'person', 'plane'];
   const objects = (Array.isArray(data.objects) ? data.objects : [])
     .filter((o) => o && types.includes(o.type))
-    .map((o, i) => ({
-      id: typeof o.id === 'string' && o.id ? o.id : newId(),
-      name: typeof o.name === 'string' ? o.name : `${o.type} ${i + 1}`,
-      type: o.type,
-      position: vec3(o.position, [0, 0, 0]),
-      rotation: vec3(o.rotation, [0, 0, 0]),
-      scale: vec3(o.scale, [1, 1, 1]),
-      grey: Number.isFinite(o.grey) ? Math.min(1, Math.max(0, o.grey)) : 0.8,
-    }));
+    .map((o, i) => {
+      const obj = {
+        id: typeof o.id === 'string' && o.id ? o.id : newId(),
+        name: typeof o.name === 'string' ? o.name : `${o.type} ${i + 1}`,
+        type: o.type,
+        position: vec3(o.position, [0, 0, 0]),
+        rotation: vec3(o.rotation, [0, 0, 0]),
+        scale: vec3(o.scale, [1, 1, 1]),
+        grey: Number.isFinite(o.grey) ? Math.min(1, Math.max(0, o.grey)) : 0.8,
+      };
+      const keys = normalizeObjectKeys(o.keys); // a moving stand-in (objectPath.js)
+      return keys ? Object.assign(obj, { keys }, objectPoseAt({ ...obj, keys }, 0)) : obj;
+    });
   const out = data.output || {};
   return {
     version: 1,
