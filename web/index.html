@@ -103,6 +103,18 @@
         <span id="render-server" class="muted"></span>
         <button id="render-close">Close</button>
       </div>
+      <div class="render-row render-server-row">
+        <label for="render-server-url">Render server URL</label>
+        <input id="render-server-url" type="text" spellcheck="false" placeholder="same origin (e.g. http://127.0.0.1:8190 or https://<pod>-8190.proxy.runpod.net)" />
+        <button id="render-connect">Connect</button>
+      </div>
+      <div id="render-demo" hidden>
+        <strong>Demo</strong> No render server answered, so this shows the bundled plaza example, rendered on an A40:
+        layout clip, its depth, the look still generated from that depth, and the LTX-2.5 render.
+        To render your own shots, run <code id="render-demo-cmd">python -m server.app</code> from
+        <a href="https://github.com/ColinWWW/open-cinema-studio#try-it" target="_blank" rel="noopener">the repo</a>
+        and enter its URL above.
+      </div>
       <div class="render-inputs">
         <div class="render-look">
           <div class="thumbs">

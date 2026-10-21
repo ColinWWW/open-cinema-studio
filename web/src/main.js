@@ -5,6 +5,7 @@ import { poseAt, removeKey, rescaleKeys, setKey, sortKeys } from './cameraPath.j
 import { ClayWorld, ShiftCamera, createRenderer } from './clay.js';
 import { canExport, exportPlayblast } from './exporter.js';
 import { PRESETS, newId, normalizeScene } from './presets.js';
+import { demoUrls } from './demo.js';
 import { initRenderPanel } from './render.js';
 import { FRAME_COUNTS, RESOLUTIONS } from './spec.js';
 
@@ -551,6 +552,7 @@ window.addEventListener('keydown', (e) => {
 const fileStem = () => `${(scene.name || 'shot').replace(/[^\w.-]+/g, '_')}_${scene.output.width}x${scene.output.height}_${scene.output.frames}f`;
 
 async function saveToDevServer(name, blob) {
+  if (!import.meta.env.DEV) return null; // only `npm run dev` has /api/save
   try {
     const res = await fetch(`/api/save?name=${encodeURIComponent(name)}`, { method: 'POST', body: blob });
     return res.ok ? (await res.json()).saved : null;
@@ -617,7 +619,12 @@ if (!canExport()) {
   $('export').title = 'Needs a browser with WebCodecs (Chrome or Edge)';
 }
 
-initRenderPanel({ getScene: () => scene, exportPlayblast: runExport });
+initRenderPanel({
+  getScene: () => scene,
+  exportPlayblast: runExport,
+  demo: demoUrls(import.meta.env.BASE_URL),
+  proxied: import.meta.env.DEV, // the dev server forwards /api to the render server
+});
 
 // Hook for scripted checks.
 window.ocs = {

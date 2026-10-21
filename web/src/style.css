@@ -82,6 +82,12 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
 .render-head { display: flex; align-items: center; gap: 10px; }
 .render-head #render-server { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #render-server.bad { color: #ff8a80; }
+.render-server-row input { flex: 1; min-width: 0; font: inherit; color: var(--text); background: #2d3137; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+#render-demo { font-size: 12px; line-height: 1.5; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 6px; }
+#render-demo[hidden] { display: none; }
+#render-demo strong { color: var(--accent); margin-right: 4px; }
+#render-demo code { user-select: all; background: #2d3137; padding: 1px 4px; border-radius: 4px; }
+#render-demo a { color: var(--accent); }
 .render-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .thumbs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 6px; }
 #render-panel figure { margin: 0; }
