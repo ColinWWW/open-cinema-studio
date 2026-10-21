@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- A grey box inside amber viewfinder corners. scripts/make_card.py draws the same mark as favicon.png. -->
+  <rect width="64" height="64" rx="12" fill="#1b1d21"/>
+  <rect x="22" y="22" width="20" height="20" fill="#9aa0a6"/>
+  <path fill="#f0b429" d="M10 10h14v5H15v9h-5zM54 10H40v5h9v9h5zM10 54h14v-5H15v-9h-5zM54 54H40v-5h9v-9h5z"/>
+</svg>
