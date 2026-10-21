@@ -13,6 +13,7 @@ Each submit is a new paid job, so nothing here retries a submit.
 
 import argparse
 import asyncio
+import re
 import sys
 import time
 from pathlib import Path
@@ -34,8 +35,12 @@ def tolerate_head_rewrites(client):
     Comfy Cloud and a local proxy answer both normally, so nothing changes there."""
     from urllib.parse import urlsplit
 
-    low = client._low
-    prep = low._p
+    low = getattr(client, "_low", None)
+    prep = getattr(low, "_p", None)
+    if not all(hasattr(o, a) for o, a in ((prep, "url"), (prep, "base_url"), (low, "head_asset_by_hash"),
+                                          (low, "raw_request"))):
+        raise RuntimeError("this comfy-sdk version changed the internals tolerate_head_rewrites patches: "
+                           "install comfy-sdk 0.5.x (server/requirements.txt) or update the shim")
     base = urlsplit(prep.base_url)
     original_url, original_head = prep.url, low.head_asset_by_hash
 
@@ -64,7 +69,7 @@ def png_size(data):
 
 
 def prompt_warnings(prompt):
-    words = prompt.lower().replace(",", " ").replace(".", " ").split()
+    words = re.split(r"[^a-z0-9]+", prompt.lower())  # whole words, split like web/src/render.js
     return [f"avoid the word {w!r} in the prompt (describe the finished shot)" for w in BANNED_WORDS if w in words]
 
 

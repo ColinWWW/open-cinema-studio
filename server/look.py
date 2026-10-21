@@ -38,7 +38,7 @@ def main(argv=None):
             print(f"target: {client!r}, still {w}x{h}, generated at {look_size(w, h)}")
             _, job_id = await render_look(client, args.depth, args.prompt, width=w, height=h, seed=args.seed,
                                           strength=args.strength, out=args.out,
-                                          on_progress=lambda **kw: print(" ", kw))
+                                          on_progress=lambda **kw: print(" ", {k: v for k, v in kw.items() if k != "handle"}))
         print(f"job {job_id}: wrote {args.out} in {time.time() - t0:.1f}s")
 
     asyncio.run(run())

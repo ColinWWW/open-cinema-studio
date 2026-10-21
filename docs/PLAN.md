@@ -102,7 +102,7 @@ is the reference for the output format.
 
 ```
 web/          three.js blocking tool (Vite): primitives, camera keys, deterministic playblast export   [after go/no-go]
-server/       thin backend: layout + first frame + prompt -> ComfyUI via the Comfy SDK; comfy_client.py is the start
+server/       thin backend: layout + first frame + prompt -> ComfyUI via the Comfy SDK
 workflows/    the API-format workflow we actually run
 scripts/      setup_pod.sh · make_test_layout.py · idle_shutdown.sh · check_open_weights.py
 examples/     layout clips, first frames, renders

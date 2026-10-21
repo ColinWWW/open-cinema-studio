@@ -1,0 +1,6 @@
+# `ruff check .` in CI: pyflakes (unused imports/names, undefined names) and pycodestyle errors.
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E731"]  # long lines and small lambdas are the house style here

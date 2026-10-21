@@ -18,6 +18,10 @@ class ProxyShimTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(prep.url("https://elsewhere.example/file.mp4"), "https://elsewhere.example/file.mp4")
                 self.assertEqual(prep.url("/jobs/abc"), "https://pod-8189.proxy.runpod.net/api/v2/jobs/abc")
 
+    def test_unknown_sdk_internals_fail_loudly(self):
+        with self.assertRaisesRegex(RuntimeError, "comfy-sdk 0.5.x"):
+            tolerate_head_rewrites(object())
+
 
 if __name__ == "__main__":
     unittest.main()

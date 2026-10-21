@@ -2,7 +2,13 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+# A new push to a PR replaces its running checks.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   server:
@@ -16,7 +22,9 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             server/requirements.txt
-      - run: pip install -r server/requirements.txt -r requirements.txt pytest
+      - run: pip install -r server/requirements.txt -r requirements.txt pytest ruff==0.16.9
+      - name: Lint (ruff.toml)
+        run: ruff check .
       - name: Server tests (the end-to-end ones start the mock ComfyUI and comfy-api-proxy)
         run: python -m unittest discover -s server/tests -t . -v
       - name: Script tests

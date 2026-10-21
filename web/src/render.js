@@ -93,14 +93,28 @@ async function json(res) {
   return body;
 }
 
+/** GET a job's state, retrying a dropped connection or a 5xx (proxy hiccup) a few times; the job keeps running meanwhile. */
+async function pollState(url, { fetchFn, wait, pollMs, retries }) {
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await fetchFn(url);
+    } catch (err) {
+      if (attempt >= retries) throw err;
+    }
+    if (res && (res.status < 500 || attempt >= retries)) return json(res);
+    await wait(pollMs * 2 ** attempt);
+  }
+}
+
 /** Submit a job ('render' or 'look') and poll until it ends. Resolves with the final state; throws on failure. */
-export async function runJob(kind, form, { server = '', fetchFn = fetch, onUpdate, pollMs = 1000, sleep } = {}) {
+export async function runJob(kind, form, { server = '', fetchFn = fetch, onUpdate, pollMs = 1000, retries = 4, sleep } = {}) {
   const wait = sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   let state = await json(await fetchFn(apiUrl(server, `/api/${kind}`), { method: 'POST', body: form }));
   onUpdate?.(state);
   while (state.status === 'queued' || state.status === 'running') {
     await wait(pollMs);
-    state = await json(await fetchFn(apiUrl(server, `/api/${kind}/${state.id}`)));
+    state = await pollState(apiUrl(server, `/api/${kind}/${state.id}`), { fetchFn, wait, pollMs, retries });
     onUpdate?.(state);
   }
   if (state.status !== 'succeeded') throw new Error(state.error || `${kind} ${state.status}`);
@@ -116,6 +130,22 @@ export async function cancelJob(kind, id, { server = '', fetchFn = fetch } = {})
 }
 
 export const runRender = (form, opts) => runJob('render', form, opts);
+
+/** Download a finished job's file (an API path from the server) as a Blob; throws on an error reply. */
+export async function fetchBlob(server, path, { fetchFn = fetch } = {}) {
+  const res = await fetchFn(apiUrl(server, path));
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `${res.status} ${res.statusText}`);
+  }
+  return res.blob();
+}
+
+/** The seed typed in the panel: any whole number (0 included), else 42. */
+export function parseSeed(value) {
+  const n = Number(value);
+  return String(value ?? '').trim() !== '' && Number.isInteger(n) && n >= 0 ? n : 42;
+}
 
 /** POST /api/stitch: cut finished renders (clip 'render') or their layout clips ('layout') together, in order. */
 export async function stitchShots(ids, { server = '', clip = 'render', fetchFn = fetch } = {}) {
@@ -368,7 +398,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
         const label = seeds.length > 1 ? `Look still ${i + 1}/${seeds.length}` : 'Look still';
         const form = lookForm({ depth, prompt, output: scene.output, seed });
         const final = await runJob('look', form, { server, onUpdate: (s) => onUpdate({ ...s, label }) });
-        const blob = await (await fetch(apiUrl(server, final.image_url))).blob();
+        const blob = await fetchBlob(server, final.image_url);
         const still = { blob, name: `look_${final.id}.png`, width: scene.output.width, height: scene.output.height, key: blast.key, seed, prompt };
         addStill(still);
         if (i === 0) setLook(still.blob, still.name, still.width, still.height, still.key);
@@ -378,7 +408,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
         ? ' Click the still you like in the strip, then render the shot.'
         : ' Happy with it? Render the shot, or generate again with another seed.';
     });
-  const seed = () => Number($('render-seed').value) || 42;
+  const seed = () => parseSeed($('render-seed').value);
 
   $('render-generate').addEventListener('click', () => generateLooks([seed()]));
   let variantsAfter = null; // the next "3 variants" carries on from the last seed it used
@@ -426,7 +456,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
         const lookJob = await runJob('look', lookForm({ depth, prompt, output: scene.output, seed: seed() }), {
           server, onUpdate: (s) => onUpdate({ ...s, label: `${label} look still` }),
         });
-        const still = await (await fetch(apiUrl(server, lookJob.image_url))).blob();
+        const still = await fetchBlob(server, lookJob.image_url);
         addStill({ blob: still, name: `${stem}_look.png`, width: scene.output.width, height: scene.output.height, key: blast.key, seed: seed(), prompt, caption: `shot ${i + 1}` });
         setLook(still, `${stem}_look.png`, scene.output.width, scene.output.height, blast.key);
         const form = renderForm({ mp4, look: still, lookName: `${stem}_look.png`, prompt, output: scene.output, seed: seed() });
@@ -436,9 +466,9 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
       status.textContent = 'Cutting the shots together…';
       const [seq, layout] = await Promise.all([stitchShots(ids, { server }), stitchShots(ids, { server, clip: 'layout' })]);
       const name = (getScene().name || 'scene').replace(/[^\w.-]+/g, '_');
-      rendered = await (await fetch(apiUrl(server, seq.video_url))).blob();
+      rendered = await fetchBlob(server, seq.video_url);
       showResult(rendered, `${name}_sequence_${seq.id}.mp4`, 'render-download', 'render-result', 'Download sequence');
-      showResult(await (await fetch(apiUrl(server, layout.video_url))).blob(), `${name}_layout_sequence_${layout.id}.mp4`,
+      showResult(await fetchBlob(server, layout.video_url), `${name}_layout_sequence_${layout.id}.mp4`,
         'render-download-layout', 'render-blast', 'Download layout sequence');
       blast = null; // the playblast player now shows the layout sequence
       status.textContent = `Sequence done: ${n} shots, ${seq.frames} frames (${(seq.frames / 24).toFixed(1)} s).`;
@@ -463,7 +493,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
         output: scene.output, seed: seed(),
       });
       const final = await runRender(form, { server, onUpdate });
-      rendered = await (await fetch(apiUrl(server, final.video_url))).blob();
+      rendered = await fetchBlob(server, final.video_url);
       showResult(rendered, `${(scene.name || 'shot').replace(/[^\w.-]+/g, '_')}_render_${final.id}.mp4`);
       $('render-play').click();
     }),

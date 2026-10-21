@@ -17,7 +17,6 @@ from aiohttp.test_utils import TestClient, TestServer
 from comfy_sdk import AsyncComfy, JobFailed
 
 from server.app import make_app
-from server.mock_comfyui import MockComfy
 from server.render import png_size, render, render_look
 from server.tests.pngs import gray_png
 
