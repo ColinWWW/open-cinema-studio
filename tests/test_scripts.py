@@ -40,6 +40,19 @@ def test_plaza_horizon_is_low():
     assert 40 <= horizon <= 54  # ~73% down the frame, like look_plaza.jpg
 
 
+def test_depth_matches_the_web_export():
+    # examples/layout_plaza_dolly_in_depth.png is the web tool's own depth map of the same shot
+    import subprocess
+
+    eye, target = layout.camera_path("dolly_in", 0.0, "plaza")
+    ours = layout.render_depth(eye, target, 960, 576, 50.0, "plaza")[..., 0].astype(int)
+    raw = subprocess.run([layout.find_ffmpeg(), "-loglevel", "error", "-i", str(ROOT / "examples/layout_plaza_dolly_in_depth.png"),
+                          "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True, check=True).stdout
+    web = np.frombuffer(raw, np.uint8).reshape(576, 960).astype(int)
+    assert np.abs(ours - web).mean() < 0.5
+    assert ours[0, 480] == 0 and ours[-1, 480] > 200  # sky black, near floor bright
+
+
 def test_camera_moves_start_and_end_differ():
     for move in ("dolly_in", "orbit", "crane_up", "truck"):
         assert not np.allclose(layout.camera_path(move, 0.0)[0], layout.camera_path(move, 1.0)[0])
