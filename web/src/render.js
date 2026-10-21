@@ -682,4 +682,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
       $('render-play').click();
     }),
   );
+
+  // The editor calls this when the scene changes under an open panel (shots added or removed, a new scene, a new size).
+  return { refresh: refreshHints };
 }

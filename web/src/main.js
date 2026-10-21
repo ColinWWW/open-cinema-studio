@@ -9,6 +9,7 @@ import { demoUrls } from './demo.js';
 import { confirmDialog } from './dialog.js';
 import { initRenderPanel, loadServer } from './render.js';
 import { initReplay, loadSeen, shouldAutoOpen } from './replay.js';
+import { decodeScene, hasSharedScene, shareLink, showToast } from './share.js';
 import { addShot, moveShot, removeShot, rescaleShots, selectShot, shotStem } from './shots.js';
 import { FRAME_COUNTS, RESOLUTIONS } from './spec.js';
 
@@ -25,6 +26,7 @@ let selectedId = null;
 let pilot = false;
 let playing = false;
 let exporting = false;
+let renderPanel = null; // {refresh}: set up at the end, once the editor is wired
 
 // ---------- three.js setup ----------
 const world = new ClayWorld();
@@ -261,6 +263,7 @@ function refreshAll() {
   refreshCameraPath();
   refreshTimeline();
   refreshHud();
+  renderPanel?.refresh(); // e.g. "Render all N shots" when shots change while the panel is open
 }
 
 function refreshHeader() {
@@ -469,6 +472,7 @@ $('resolution').addEventListener('change', (e) => {
   scene.output.width = w;
   scene.output.height = h;
   if (pilot) enterPilotPose();
+  renderPanel?.refresh(); // the look still's aspect warning depends on the size
   save();
 });
 for (const n of FRAME_COUNTS) $('frames').add(new Option(`${n} (${(n / 24).toFixed(1)} s)`, String(n)));
@@ -500,6 +504,33 @@ $('load-json').addEventListener('change', async (e) => {
     flash(`Could not load ${file.name}: ${err.message}`);
   }
 });
+
+// ---------- share as a link ----------
+$('share-link').addEventListener('click', async () => {
+  const link = await shareLink(scene, location.href);
+  if (!link.ok) return showToast(link.message);
+  try {
+    await navigator.clipboard.writeText(link.url);
+    showToast('Link copied. Anyone who opens it gets this scene.');
+  } catch {
+    // No clipboard (plain http, or permission refused): leave the link in the address bar to copy by hand.
+    history.replaceState(null, '', link.url);
+    showToast('Could not reach the clipboard, so the link is in the address bar. Copy it from there.');
+  }
+});
+
+// Opens a #scene=… link. The hash is cleared afterwards so a reload doesn't ask again; a damaged one is ignored.
+async function openSharedScene() {
+  if (!hasSharedScene(location.hash)) return;
+  const shared = await decodeScene(location.hash);
+  history.replaceState(null, '', location.pathname + location.search);
+  if (!shared) return showToast('That share link is damaged or cut short, so it was ignored.');
+  if (edited && scene.objects.length && !(await confirmDialog(`Replace your current scene with the shared "${shared.name}"?`, { ok: 'Open shared scene' }))) return;
+  loadScene(shared);
+  showToast(`Opened the shared scene "${shared.name}".`);
+}
+const openedShared = hasSharedScene(location.hash);
+window.addEventListener('hashchange', () => openSharedScene().catch(() => {}));
 
 for (const btn of document.querySelectorAll('[data-add]')) btn.addEventListener('click', () => addObject(btn.dataset.add));
 function setMode(mode) {
@@ -687,7 +718,7 @@ if (!canExport()) {
 }
 
 const demo = demoUrls(import.meta.env.BASE_URL);
-initRenderPanel({
+renderPanel = initRenderPanel({
   getScene: () => scene,
   showShot,
   exportPlayblast: runExport,
@@ -702,7 +733,7 @@ initReplay({
     if (!edited) loadScene(PRESETS.plaza.make());
   },
   onRender: () => $('render-open').click(),
-  autoOpen: shouldAutoOpen({ dev: import.meta.env.DEV, server: loadServer(), seen: loadSeen() }),
+  autoOpen: !openedShared && shouldAutoOpen({ dev: import.meta.env.DEV, server: loadServer(), seen: loadSeen() }),
 });
 
 // Hook for scripted checks.
@@ -722,3 +753,4 @@ world.syncObjects(scene.objects);
 world.setFog(scene.fog);
 refreshAll();
 requestAnimationFrame(tick);
+openSharedScene().catch(() => {});

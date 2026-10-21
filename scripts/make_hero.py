@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LAYOUT = ROOT / "examples" / "layout_plaza_dolly_in.mp4"
-RENDER = ROOT / "examples" / "stage1_genlook_plaza_a40.mp4"
+RENDER = ROOT / "examples" / "stage1_day_plaza_a40.mp4"  # three_looks.py's day look: the still keeps the sky
 
 
 def ffmpeg():

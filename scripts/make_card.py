@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 LAYOUT = ROOT / "examples" / "layout_plaza_dolly_in_first.png"
-RENDER = ROOT / "examples" / "stage1_genlook_plaza_a40.mp4"
+RENDER = ROOT / "examples" / "stage1_day_plaza_a40.mp4"  # the day look that keeps the sky (as the hero GIF)
 PUBLIC = ROOT / "web" / "public"
 
 # web/src/style.css
