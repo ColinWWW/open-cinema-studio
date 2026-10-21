@@ -13,6 +13,14 @@ python scripts/demo/assemble.py                          # ~1 min: demo/demo.mp4
 
 Needs Node 22, Python 3.10+ and `ffmpeg` on the PATH. `demo/` is in `.gitignore`: don't commit the video.
 
+| | |
+|---|---|
+| ![Hook](frames/hook.jpg) | ![Block](frames/block.jpg) |
+| ![Render panel in demo mode](frames/render_panel.jpg) | ![Look stills](frames/look_stills.jpg) |
+| ![Sequence](frames/sequence.jpg) | ![End card](frames/end_card.jpg) |
+
+<sub>Frames from a run with Playwright's Chromium (no GPU); `frames/` holds these only for this page.</sub>
+
 ## What each script does
 
 **`record.mjs`** builds `web/`, serves it with `vite preview`, and drives it in Playwright at
