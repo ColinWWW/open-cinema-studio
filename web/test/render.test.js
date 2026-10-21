@@ -74,6 +74,52 @@ test('cancelJob posts to the job and accepts one that already ended', async () =
   assert.equal((await cancelJob('look', 'done', { fetchFn })).status, 'succeeded');
 });
 
+test('runJob sends nothing when cancelled before the submit', async () => {
+  const calls = [];
+  const fetchFn = async (url, opts) => (calls.push([url, opts?.method || 'GET']), reply({ id: 'x', status: 'queued' }));
+  const ctl = new AbortController();
+  ctl.abort();
+  await assert.rejects(runJob('render', new FormData(), { fetchFn, sleep: async () => {}, signal: ctl.signal }), /render cancelled/);
+  assert.deepEqual(calls, []);
+});
+
+test('runJob cancels the job it submitted when Cancel comes after the submit', async () => {
+  // Cancel pressed while the POST is in flight (e.g. between Render all shots): the new job must not keep the GPU busy.
+  const ctl = new AbortController();
+  const calls = [];
+  const fetchFn = async (url, opts) => {
+    calls.push([url, opts?.method || 'GET']);
+    if (url === '/api/look') {
+      ctl.abort();
+      return reply({ id: 'l9', status: 'queued' }, 202);
+    }
+    return reply({ id: 'l9', status: 'cancelled' });
+  };
+  const seen = [];
+  await assert.rejects(
+    runJob('look', new FormData(), { fetchFn, sleep: async () => {}, signal: ctl.signal, onUpdate: (s) => seen.push(s.status) }),
+    /look cancelled/,
+  );
+  assert.deepEqual(calls, [['/api/look', 'POST'], ['/api/look/l9/cancel', 'POST']]);
+  assert.deepEqual(seen, ['queued']);
+});
+
+test('runJob cancels a running job between polls, even if the cancel request fails', async () => {
+  const ctl = new AbortController();
+  const calls = [];
+  const fetchFn = async (url, opts) => {
+    calls.push([url, opts?.method || 'GET']);
+    if (url === '/api/render') return reply({ id: 'r7', status: 'queued' }, 202);
+    if (url.endsWith('/cancel')) throw new TypeError('Failed to fetch');
+    return reply({ id: 'r7', status: 'running', stage: 'rendering', progress: 0.3 });
+  };
+  const sleep = async () => {
+    if (calls.length >= 2) ctl.abort(); // after the first poll
+  };
+  await assert.rejects(runRender(new FormData(), { fetchFn, sleep, signal: ctl.signal }), /render cancelled/);
+  assert.deepEqual(calls, [['/api/render', 'POST'], ['/api/render/r7', 'GET'], ['/api/render/r7/cancel', 'POST']]);
+});
+
 test('lookForm carries the depth map and the clip size', () => {
   const form = lookForm({ depth: new Blob(['png']), prompt: 'a plaza', output: { width: 960, height: 576, frames: 65 }, seed: 3 });
   assert.equal(form.get('depth').name, 'depth.png');
