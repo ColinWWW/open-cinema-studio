@@ -89,7 +89,7 @@
   <text class="m" x="702" y="240">LTX-2.5 + Layout-to-Render IC-LoRA</text>
   <text class="m" x="702" y="258">follows the layout clip's camera</text>
   <text class="m" x="702" y="274">and takes its look from the still</text>
-  <text class="s" x="702" y="298">Stage 1: 960×576</text>
+  <text class="s" x="702" y="298" style="font-size:12px">Stage 1: 960×576 (960×544 under stage 2)</text>
   <text class="s" x="702" y="316">Stage 2: 1920×1088 (x2 upscale)</text>
 
   <!-- 4. back to the page -->

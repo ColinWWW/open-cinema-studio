@@ -36,11 +36,12 @@ follows that camera move and layout. Real A40 output, stage 1, from <code>exampl
 
 | Step | Size | Time |
 | --- | --- | --- |
-| Look still (Z-Image-Turbo + depth ControlNet) | about 1 MP | ~11 s warm, ~46 s cold |
-| Stage 1 clip (LTX-2.5 + IC-LoRA) | 960×576, 65 frames | ~170 s |
+| Look still (Z-Image-Turbo + depth ControlNet) | about 1 MP | ~11 s warm, ~46–51 s cold |
+| Stage 1 clip (LTX-2.5 + IC-LoRA) | 960×576, 65 frames | ~167 s |
 | Stage 1 clip | 960×576, 121 frames (5 s) | 257 s |
 | Stage 2 clip (x2 latent upscale + 3 refine steps) | 1920×1088, 97 frames | 373 s |
 
+Single A40 runs on Oct 21; your times will vary.
 
 > Status: both pipelines pass on an A40. The look still (Z-Image-Turbo + depth ControlNet) is generated from the
 > layout's own depth, so it lines up box for box, and the stage-1 video render from it keeps both the look and the
