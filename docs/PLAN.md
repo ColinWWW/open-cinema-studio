@@ -1,6 +1,6 @@
 # Open Cinema Studio — Plan
 
-> Updated Oct 20, 2026. Owner: Colin (solo, ~30–50 build hours total).
+> Updated Oct 21, 2026. Owner: Colin (solo, ~30–50 build hours total).
 > Earlier concept ("Reshoot", depth-warp re-filming) was dropped in favour of this. It's still in git history.
 
 ## 1. Competition
@@ -32,10 +32,13 @@ Honest odds: ~5% for the 5090, 15–25% for *some* prize. The repo is the guaran
   Hugging Face into Cloud is fine; small local preprocessing is fine. Open weights = **no partner nodes**
   (paid external API nodes).
 
+**Decided (Oct 21):** a **self-hosted** ComfyUI (rented GPU) driven through the SDK counts. Colin's call,
+not yet confirmed by Comfy: the server uses the official `comfy-sdk` either way (self-hosted via
+`comfy-api-proxy`), and open weights means "can be downloaded and run locally" (guill). Confirmation
+asked on Discord; until it comes, keep the README showing both targets (Comfy Cloud first, self-hosted second).
+
 **Still open (ask as a follow-up):**
-1. Does a **self-hosted** ComfyUI (rented GPU) driven through the SDK count, or must it run on Comfy Cloud?
-   Until answered, **Comfy Cloud via the SDK is the main target**; RunPod is for development.
-2. Can one entry win a main prize **and** the LTX bonus?
+1. Can one entry win a main prize **and** the LTX bonus?
 
 SF Build Night Oct 28 (https://luma.com/5mydmvu6): for debugging with the Comfy team, not for building.
 
