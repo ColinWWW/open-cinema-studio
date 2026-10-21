@@ -33,6 +33,7 @@ def name_rules(name):
         ("docs/submission/WRITEUP.md", r"(?<!`)<NAME>(?!`)", esc),
         ("web/index.html", rf"<title>{OLD_NAME}( —|</title>)", rf"<title>{esc}\1"),
         ("web/index.html", rf'(class="brand">){OLD_NAME}<', rf"\g<1>{esc}<"),
+        ("scripts/demo/assemble.py", rf'^TITLE = "{OLD_NAME}"$', f'TITLE = "{esc}"'),  # the video's end card
     ]
 
 
@@ -46,6 +47,8 @@ def slug_rules(slug):
         ("web/playwright.config.js", rf"'/{OLD_SLUG}/'", f"'/{slug}/'"),
         ("web/playwright.config.js", rf"\(under /{OLD_SLUG}/\)", f"(under /{slug}/)"),
         (".github/workflows/pages.yml", rf"(BASE_PATH:\s*)/{OLD_SLUG}/", rf"\g<1>/{slug}/"),
+        ("scripts/demo/assemble.py", rf'^LIVE_LINK = "colinwww\.github\.io/{OLD_SLUG}"$', f'LIVE_LINK = "colinwww.github.io/{slug}"'),
+        ("scripts/demo/assemble.py", rf'^REPO = "github\.com/{OWNER}/{OLD_SLUG}"$', f'REPO = "github.com/{OWNER}/{slug}"'),
     ]
 
 
@@ -107,4 +110,8 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # The diff has non-ASCII (▶, ×, —): print UTF-8 even on a Windows console whose default is cp1252.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())
