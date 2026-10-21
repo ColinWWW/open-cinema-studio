@@ -163,37 +163,44 @@ def parts(raw: Path) -> list[Part]:
         Part(8, "Block a shot with grey boxes. Get back a cinematic clip that moves exactly like it. "
                 "Open weights only.", two_up(layout, render, sbs)),
         # 0:08 Block
-        Part(22, "A three.js blocking tool in the browser: place stand-ins, frame the shot, key the camera "
+        Part(20, "A three.js blocking tool in the browser: place stand-ins, frame the shot, key the camera "
                  "or pick a move.", editor(raw, beats["block"])),
+        # 0:28 Stand-ins can move
+        Part(8, "Stand-ins can move: key the person on frame 0 and the last frame, move it there, and it walks.",
+             editor(raw, beats["walk"])),
+        Part(7, "Block a person walking, get a person walking: the render follows the keyed path while the "
+                "camera orbits.",
+             two_up(EX / "layout_plaza_walk_orbit.mp4", EX / "stage1_walk_orbit_a40.mp4",
+                    ("Layout: a keyed walk, orbit right", "LTX-2.5 render (A40)"))),
     ]
-    # 0:30 Playblast
+    # 0:43 Playblast
     still_row = [Media(layout, 30, 250, 600, 360, "Layout clip (MP4)"), Media(frame0, 660, 250, 600, 360, "Frame 0"),
                  Media(depth, 1290, 250, 600, 360, "Depth (frame 0)")]
     cap = "It exports an on-spec layout clip and frame 0's depth, right in the browser."
     if "playblast" in beats:
-        out += [Part(6, cap, editor(raw, beats["playblast"])), Part(4, cap, still_row)]
+        out += [Part(5, cap, editor(raw, beats["playblast"])), Part(3, cap, still_row)]
     else:
-        out += [Part(10, cap, still_row)]
+        out += [Part(8, cap, still_row)]
     look_cap = ("Z-Image-Turbo with a depth ControlNet paints the first frame from the layout's own depth, "
                 "so it lines up box for box.")
     out += [
-        # 0:40 Art-direct
-        Part(10, look_cap, editor(raw, beats["render"])),
-        Part(10, look_cap, grid([(depth, "Depth (frame 0)"), (EX / "look_day_plaza.png", "Look still: sunny day"),
-                                 (EX / "look_night_plaza.png", "Rainy night"), (EX / "look_snow_plaza.png", "Snowy dusk")])),
-        # 1:00 Render
-        Part(8, "LTX-2.5 with the Layout-to-Render IC-LoRA follows the layout's camera and blocking and takes "
+        # 0:51 Art-direct
+        Part(8, look_cap, editor(raw, beats["render"])),
+        Part(8, look_cap, grid([(depth, "Depth (frame 0)"), (EX / "look_day_plaza.png", "Look still: sunny day"),
+                                (EX / "look_night_plaza.png", "Rainy night"), (EX / "look_snow_plaza.png", "Snowy dusk")])),
+        # 1:07 Render
+        Part(7, "LTX-2.5 with the Layout-to-Render IC-LoRA follows the layout's camera and blocking and takes "
                 "the look from that frame. About 3 minutes on an A40.",
              two_up(scene_layout, scene_render, ("The shot blocked above", "Its LTX-2.5 render (A40)"))),
-        Part(7, "Stage 2: an x2 latent upscale and 3 refine steps to 1920x1088, 97 frames in about 6 minutes.",
+        Part(5, "Stage 2: an x2 latent upscale and 3 refine steps to 1920x1088, 97 frames in about 6 minutes.",
              [Media(EX / "two_stage_day_plaza_1920_a40.mp4", (W - 1568) // 2, (BAND_Y - 888) // 2, 1568, 888,
                     "Stage 2, 1920x1088 (A40)")]),
-        # 1:15 A scene, not a clip
-        Part(15, "Add shots, order the cut, render the whole scene: one blocking, several cameras, one sequence.",
-             two_up(EX / "sequence_plaza_4shots_layout.mp4", EX / "sequence_plaza_4shots_a40.mp4",
-                    ("4-shot layout sequence", "4-shot render (A40)"))),
-        # 1:30 Same blocking, any look (three_looks_plaza.mp4 is already a 2x2: layout, day, night, snow)
-        Part(15, "Same blocking, three looks. Change the prompt, not the shot.",
+        # 1:19 Four moves, four places (four_moves.mp4 is already a 2x2, each render with its layout inset)
+        Part(13, "Four camera moves in four places: orbit, crane up, truck and dolly in. Each render follows "
+                 "its grey layout (inset).",
+             [Media(EX / "four_moves.mp4", (W - 1500) // 2, 20, 1500, 900)]),
+        # 1:32 Same blocking, any look (three_looks_plaza.mp4 is already a 2x2: layout, day, night, snow)
+        Part(13, "Same blocking, three looks. Change the prompt, not the shot.",
              [Media(EX / "three_looks_plaza.mp4", (W - 1500) // 2, 20, 1500, 900)]),
         # 1:45 How it's built (ends a little before 2:00)
         Part(14.5, "Built on the Comfy SDK with our own core-node workflows, on Comfy Cloud or your own GPU. "
