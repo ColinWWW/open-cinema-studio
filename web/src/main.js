@@ -25,6 +25,7 @@ let selectedId = null;
 let pilot = false;
 let playing = false;
 let exporting = false;
+let renderPanel = null; // {refresh}: set up at the end, once the editor is wired
 
 // ---------- three.js setup ----------
 const world = new ClayWorld();
@@ -261,6 +262,7 @@ function refreshAll() {
   refreshCameraPath();
   refreshTimeline();
   refreshHud();
+  renderPanel?.refresh(); // e.g. "Render all N shots" when shots change while the panel is open
 }
 
 function refreshHeader() {
@@ -469,6 +471,7 @@ $('resolution').addEventListener('change', (e) => {
   scene.output.width = w;
   scene.output.height = h;
   if (pilot) enterPilotPose();
+  renderPanel?.refresh(); // the look still's aspect warning depends on the size
   save();
 });
 for (const n of FRAME_COUNTS) $('frames').add(new Option(`${n} (${(n / 24).toFixed(1)} s)`, String(n)));
@@ -687,7 +690,7 @@ if (!canExport()) {
 }
 
 const demo = demoUrls(import.meta.env.BASE_URL);
-initRenderPanel({
+renderPanel = initRenderPanel({
   getScene: () => scene,
   showShot,
   exportPlayblast: runExport,
