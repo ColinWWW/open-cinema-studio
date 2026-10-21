@@ -20,10 +20,15 @@ header, footer {
 }
 footer { border-top: 1px solid var(--line); border-bottom: 0; }
 .brand { margin-right: 8px; }
+/* Header items never break mid-label; if the row is still too narrow (other fonts), the row wraps instead. */
+header { flex-wrap: wrap; row-gap: 6px; }
 header > * { white-space: nowrap; }
 header select { max-width: 150px; }
 /* Narrower windows: the Scene / Size / Frames captions go above their menus so the header fits on one row. */
 @media (max-width: 1180px) {
+  header { gap: 6px; }
+  .brand { margin-right: 4px; }
+  header select { max-width: 130px; }
   header label:not(.file-btn) { display: grid; gap: 1px; font-size: 11px; color: var(--muted); }
   header label select { font-size: 13px; color: var(--text); }
 }
