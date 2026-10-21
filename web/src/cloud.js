@@ -215,10 +215,16 @@ export function panelState(job, kind) {
 
 /**
  * Submit one graph, poll the job until it ends, download the first `type` ('video'/'image') output of
- * `outputNode`. Resolves {blob, state}; throws with the node error on failure.
+ * `outputNode`. Resolves {blob, state}; throws with the node error on failure. `signal` cancels like the
+ * server path's runJob: before the submit nothing is sent, after it the Comfy job is cancelled too.
  */
-export async function runCloudJob(client, graph, { kind, outputNode, type, onUpdate, pollMs = 2000, sleep } = {}) {
+export async function runCloudJob(client, graph, { kind, outputNode, type, onUpdate, pollMs = 2000, sleep, signal } = {}) {
   const wait = sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const stop = async (id) => {
+    if (id) await client.cancel(id).catch(() => {});
+    throw new Error(`${kind} cancelled`);
+  };
+  if (signal?.aborted) await stop(null);
   const t0 = Date.now();
   const stateOf = (j) => {
     const s = panelState(j, kind);
@@ -228,7 +234,9 @@ export async function runCloudJob(client, graph, { kind, outputNode, type, onUpd
   let job = await client.submit(graph);
   onUpdate?.(stateOf(job));
   while (!TERMINAL.has(job.status)) {
+    if (signal?.aborted) await stop(job.id);
     await wait(pollMs);
+    if (signal?.aborted) await stop(job.id);
     job = await client.getJob(job.id);
     onUpdate?.(stateOf(job));
   }
@@ -243,6 +251,7 @@ export async function runCloudJob(client, graph, { kind, outputNode, type, onUpd
 export async function cloudLook(client, { depth, prompt, output, seed, strength }, opts = {}) {
   lookSize(output.width, output.height); // validate before uploading anything
   if (!prompt.trim()) throw new Error('prompt is empty');
+  if (opts.signal?.aborted) throw new Error('look cancelled');
   opts.onUpdate?.({ kind: 'look', status: 'running', stage: 'uploading' });
   const asset = await client.upload(depth, 'depth.png');
   const graph = buildLookStill({ depth: asset, prompt, width: output.width, height: output.height, seed, strength });
@@ -253,6 +262,7 @@ export async function cloudLook(client, { depth, prompt, output, seed, strength 
 export async function cloudRender(client, { mp4, look, lookName, prompt, output, seed }, opts = {}) {
   checkDims(output.width, output.height, output.frames);
   if (!prompt.trim()) throw new Error('prompt is empty');
+  if (opts.signal?.aborted) throw new Error('render cancelled');
   opts.onUpdate?.({ kind: 'render', status: 'running', stage: 'uploading' });
   const layout = await client.upload(mp4, 'layout.mp4');
   const lookAsset = await client.upload(look, lookName || 'look.png');

@@ -6,6 +6,7 @@ import { ClayWorld, ShiftCamera, createRenderer } from './clay.js';
 import { canExport, exportPlayblast } from './exporter.js';
 import { PRESETS, newId, normalizeScene } from './presets.js';
 import { demoUrls } from './demo.js';
+import { confirmDialog } from './dialog.js';
 import { initRenderPanel, loadServer } from './render.js';
 import { initReplay, loadSeen, shouldAutoOpen } from './replay.js';
 import { addShot, moveShot, removeShot, rescaleShots, selectShot, shotStem } from './shots.js';
@@ -202,8 +203,8 @@ function keyCamera() {
 }
 
 /** Replace the camera keys with a one-click move that starts from the frame-0 framing. */
-function applyMove(move) {
-  if (scene.camera.keys.length > 2 && !confirm('Replace your camera keys with this move? (It starts from the frame-0 framing.)')) return;
+async function applyMove(move) {
+  if (scene.camera.keys.length > 2 && !(await confirmDialog('Replace your camera keys with this move? (It starts from the frame-0 framing.)'))) return;
   const { keys, ease } = cameraMove(move, poseAt(scene.camera.keys, 0, scene.camera.ease), scene.output.frames);
   scene.camera.keys = keys;
   scene.camera.ease = ease;
@@ -451,10 +452,10 @@ canvas.addEventListener('pointerup', (e) => {
 $('preset').add(new Option('Load preset…', ''));
 for (const [key, preset] of Object.entries(PRESETS)) $('preset').add(new Option(preset.label, key));
 $('preset').value = '';
-$('preset').addEventListener('change', (e) => {
+$('preset').addEventListener('change', async (e) => {
   const key = e.target.value;
   if (!key) return;
-  if (scene.objects.length && !confirm(`Replace the current scene with "${PRESETS[key].label}"?`)) {
+  if (scene.objects.length && !(await confirmDialog(`Replace the current scene with "${PRESETS[key].label}"?`))) {
     e.target.value = '';
     return;
   }
@@ -549,8 +550,8 @@ $('shot-add').addEventListener('click', () => {
   changeShots(addShot);
   flash(`${scene.shots[scene.shot].name}: a copy of the last shot. Reframe it, or apply a move`);
 });
-$('shot-del').addEventListener('click', () => {
-  if (confirm(`Delete "${scene.shots[scene.shot].name}"?`)) changeShots(removeShot);
+$('shot-del').addEventListener('click', async () => {
+  if (await confirmDialog(`Delete "${scene.shots[scene.shot].name}"?`, { ok: 'Delete' })) changeShots(removeShot);
 });
 $('shot-up').addEventListener('click', () => changeShots((s) => moveShot(s, s.shot, -1)));
 $('shot-down').addEventListener('click', () => changeShots((s) => moveShot(s, s.shot, 1)));

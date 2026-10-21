@@ -128,13 +128,24 @@ async function pollState(url, { fetchFn, wait, pollMs, retries }) {
   }
 }
 
-/** Submit a job ('render' or 'look') and poll until it ends. Resolves with the final state; throws on failure. */
-export async function runJob(kind, form, { server = '', fetchFn = fetch, onUpdate, pollMs = 1000, retries = 4, sleep } = {}) {
+/**
+ * Submit a job ('render' or 'look') and poll until it ends. Resolves with the final state; throws on failure.
+ * `signal` (an AbortSignal) cancels: before the submit nothing is sent; after it the job is cancelled on the
+ * server too, so a job submitted just after the user pressed Cancel doesn't keep the GPU busy.
+ */
+export async function runJob(kind, form, { server = '', fetchFn = fetch, onUpdate, pollMs = 1000, retries = 4, sleep, signal } = {}) {
   const wait = sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const stop = async (id) => {
+    if (id) await cancelJob(kind, id, { server, fetchFn }).catch(() => {});
+    throw new Error(`${kind} cancelled`);
+  };
+  if (signal?.aborted) await stop(null);
   let state = await json(await fetchFn(apiUrl(server, `/api/${kind}`), { method: 'POST', body: form }));
   onUpdate?.(state);
   while (state.status === 'queued' || state.status === 'running') {
+    if (signal?.aborted) await stop(state.id);
     await wait(pollMs);
+    if (signal?.aborted) await stop(state.id);
     state = await pollState(apiUrl(server, `/api/${kind}/${state.id}`), { fetchFn, wait, pollMs, retries });
     onUpdate?.(state);
   }
@@ -255,8 +266,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
   let blast = null; // {mp4, firstFrame, depth, key}
   let rendered = null; // the last render's MP4 blob
   let busy = false;
-  let current = null; // {kind, id} of the job running now, for Cancel
-  let cancelled = false; // stops Render all shots between shots
+  let abort = null; // the running work's AbortController: Cancel aborts it, and runJob cancels its job
   const urls = new Map();
   const setUrl = (el, blob) => {
     if (urls.has(el)) URL.revokeObjectURL(urls.get(el));
@@ -352,8 +362,10 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
   async function currentBlast(status) {
     if (!blast || blast.key !== sceneKey()) {
       status.textContent = 'Exporting the playblast…';
+      const key = sceneKey(); // the scene this export is of, even if it's edited meanwhile
       const r = await exportPlayblast();
-      blast = { mp4: r.mp4, firstFrame: r.firstFrame, depth: r.depth, key: sceneKey() };
+      if (!r) throw new Error('a playblast export is already running: try again when it finishes');
+      blast = { mp4: r.mp4, firstFrame: r.firstFrame, depth: r.depth, key };
       setUrl($('render-blast'), blast.mp4);
       setUrl($('render-frame0'), blast.firstFrame);
       setUrl($('render-depth'), blast.depth);
@@ -361,55 +373,54 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     return blast;
   }
 
-  /** Run a job with the panel locked; reports progress in the status line. */
+  /** Run a job with the panel locked; reports progress in the status line. `work` gets the AbortSignal for runJob. */
   async function withBusy(label, work) {
     if (busy) return;
     busy = true;
-    cancelled = false;
+    abort = new AbortController();
+    const { signal } = abort;
     $('render-cancel').hidden = false;
     refreshHints();
     const status = $('render-status');
     try {
       await work(status, (s) => {
-        if (s.id && s.kind) current = { kind: s.kind, id: s.id, cloud: !!s.cloud };
-        if (cancelled) throw new Error('cancelled');
+        if (signal.aborted) return; // keep "Cancelling…" up until the job has been cancelled
         status.textContent = `${s.label || label}: ${describeState(s)}`;
         $('render-progress').value = s.status === 'succeeded' ? 1 : s.progress || 0;
-      });
+      }, signal);
     } catch (err) {
-      status.textContent = cancelled ? `${label} cancelled.` : `${label} failed: ${err.message}`;
+      status.textContent = signal.aborted ? `${label} cancelled.` : `${label} failed: ${err.message}`;
     } finally {
       busy = false;
-      current = null;
+      abort = null;
       $('render-cancel').hidden = true;
       refreshHints();
     }
   }
 
-  $('render-cancel').addEventListener('click', async () => {
-    cancelled = true;
+  $('render-cancel').addEventListener('click', () => {
+    if (!abort) return;
+    abort.abort();
     $('render-status').textContent = 'Cancelling…';
-    if (current?.cloud) await comfyClient(cloud).cancel(current.id).catch(() => {});
-    else if (current) await cancelJob(current.kind, current.id, { server }).catch(() => {});
   });
 
-  /** Look still from frame 0's depth on the chosen target: {blob, id, seconds}. */
-  async function makeLook(params, onUpdate) {
+  /** Look still from frame 0's depth on the chosen target: {blob, id, seconds}. `signal` cancels it (see runJob). */
+  async function makeLook(params, onUpdate, signal) {
     if (target === 'cloud') {
-      const { blob, state } = await cloudLook(comfyClient(cloud), params, { onUpdate });
+      const { blob, state } = await cloudLook(comfyClient(cloud), params, { onUpdate, signal });
       return { blob, id: state.id.slice(0, 8), seconds: state.seconds };
     }
-    const final = await runJob('look', lookForm(params), { server, onUpdate });
+    const final = await runJob('look', lookForm(params), { server, signal, onUpdate });
     return { blob: await fetchBlob(server, final.image_url), id: final.id, seconds: final.seconds };
   }
 
-  /** Stage-1 render on the chosen target: {blob, id, seconds}. */
-  async function makeRender(params, onUpdate) {
+  /** Stage-1 render on the chosen target: {blob, id, seconds}. `signal` cancels it (see runJob). */
+  async function makeRender(params, onUpdate, signal) {
     if (target === 'cloud') {
-      const { blob, state } = await cloudRender(comfyClient(cloud), params, { onUpdate });
+      const { blob, state } = await cloudRender(comfyClient(cloud), params, { onUpdate, signal });
       return { blob, id: state.id.slice(0, 8), seconds: state.seconds };
     }
-    const final = await runRender(renderForm(params), { server, onUpdate });
+    const final = await runRender(renderForm(params), { server, signal, onUpdate });
     return { blob: await fetchBlob(server, final.video_url), id: final.id, seconds: final.seconds };
   }
 
@@ -528,13 +539,13 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
 
   /** Generate one look still per seed from frame 0's depth; the first becomes the look, all go in the strip. */
   const generateLooks = (seeds) =>
-    withBusy('Look still', async (status, onUpdate) => {
+    withBusy('Look still', async (status, onUpdate, signal) => {
       const { depth } = await currentBlast(status);
       const scene = getScene();
       const prompt = $('render-prompt').value;
       for (const [i, seed] of seeds.entries()) {
         const label = seeds.length > 1 ? `Look still ${i + 1}/${seeds.length}` : 'Look still';
-        const final = await makeLook({ depth, prompt, output: scene.output, seed }, (s) => onUpdate({ ...s, label }));
+        const final = await makeLook({ depth, prompt, output: scene.output, seed }, (s) => onUpdate({ ...s, label }), signal);
         const blob = final.blob;
         const still = { blob, name: `look_${final.id}.png`, width: scene.output.width, height: scene.output.height, key: blast.key, seed, prompt };
         addStill(still);
@@ -580,7 +591,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
   }
 
   $('render-all').addEventListener('click', () =>
-    withBusy('Sequence', async (status, onUpdate) => {
+    withBusy('Sequence', async (status, onUpdate, signal) => {
       for (const id of ['render-download', 'render-download-layout']) $(id).hidden = true;
       const prompt = $('render-prompt').value;
       const n = getScene().shots.length;
@@ -591,13 +602,13 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
         const { depth, mp4 } = await currentBlast(status);
         const scene = getScene();
         const lookJob = await runJob('look', lookForm({ depth, prompt, output: scene.output, seed: seed() }), {
-          server, onUpdate: (s) => onUpdate({ ...s, label: `${label} look still` }),
+          server, signal, onUpdate: (s) => onUpdate({ ...s, label: `${label} look still` }),
         });
         const still = await fetchBlob(server, lookJob.image_url);
         addStill({ blob: still, name: `${stem}_look.png`, width: scene.output.width, height: scene.output.height, key: blast.key, seed: seed(), prompt, caption: `shot ${i + 1}` });
         setLook(still, `${stem}_look.png`, scene.output.width, scene.output.height, blast.key);
         const form = renderForm({ mp4, look: still, lookName: `${stem}_look.png`, prompt, output: scene.output, seed: seed() });
-        const final = await runRender(form, { server, onUpdate: (s) => onUpdate({ ...s, label: `${label} render` }) });
+        const final = await runRender(form, { server, signal, onUpdate: (s) => onUpdate({ ...s, label: `${label} render` }) });
         ids.push(final.id);
       }
       status.textContent = 'Cutting the shots together…';
@@ -621,14 +632,14 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
   });
 
   $('render-go').addEventListener('click', () =>
-    withBusy('Render', async (status, onUpdate) => {
+    withBusy('Render', async (status, onUpdate, signal) => {
       for (const id of ['render-download', 'render-download-layout']) $(id).hidden = true;
       const { mp4 } = await currentBlast(status);
       const scene = getScene();
       const final = await makeRender({
         mp4, look: look.blob, lookName: look.name, prompt: $('render-prompt').value,
         output: scene.output, seed: seed(),
-      }, onUpdate);
+      }, onUpdate, signal);
       rendered = final.blob;
       showResult(rendered, `${(scene.name || 'shot').replace(/[^\w.-]+/g, '_')}_render_${final.id}.mp4`);
       $('render-play').click();

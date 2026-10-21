@@ -210,6 +210,25 @@ test('failed and cancelled jobs throw with the node error', async () => {
     /without an image from node 60/);
 });
 
+test('Cancel stops a cloud job: nothing sent before the submit, the job cancelled after it', async () => {
+  const calls = [];
+  const ctl = new AbortController();
+  const client = {
+    upload: async () => (calls.push('upload'), { id: 'a1' }),
+    submit: async () => (calls.push('submit'), ctl.abort(), { id: 'j1', status: 'pending' }), // Cancel lands mid-submit
+    getJob: async () => (calls.push('get'), { id: 'j1', status: 'in_progress' }),
+    cancel: async (id) => (calls.push(`cancel ${id}`), {}),
+  };
+  const graph = { 60: { inputs: {} } };
+  await assert.rejects(runCloudJob(client, graph, { kind: 'render', outputNode: '60', type: 'video', sleep: async () => {}, signal: ctl.signal }),
+    /render cancelled/);
+  assert.deepEqual(calls, ['submit', 'cancel j1']);
+  calls.length = 0;
+  await assert.rejects(cloudLook(client, { depth: new Blob(['png']), prompt: 'a plaza', output: { width: 960, height: 576 } }, { signal: ctl.signal }),
+    /look cancelled/);
+  assert.deepEqual(calls, []); // already cancelled: no upload, no submit
+});
+
 test('cancel posts to the job', async () => {
   const api = fakeComfy();
   const client = comfyClient({ key: 'comfyui-test', fetchFn: api.fetchFn });
