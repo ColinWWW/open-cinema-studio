@@ -1,5 +1,7 @@
 # Open Cinema Studio
 
+[![CI](https://github.com/ColinWWW/open-cinema-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/ColinWWW/open-cinema-studio/actions/workflows/ci.yml)
+
 Block out a shot with grey boxes and a camera path in your browser, give it one art-direction
 frame, and get back a cinematic clip that follows your exact camera move and layout.
 Open-weights only: **LTX-2.5 + the Layout-to-Render IC-LoRA** for the clip and **Z-Image-Turbo + a depth
@@ -16,6 +18,23 @@ Entry for the [Comfy Open Source Higgsfield Challenge](https://comfy.org/open-so
 > (`examples/look_gen_plaza_a40.png`, `examples/stage1_genlook_plaza_a40.mp4`, contact sheet
 > `examples/stage1_genlook_plaza_frames.png`).
 > Plan, specs and budget: [docs/PLAN.md](docs/PLAN.md).
+
+## Try it
+
+**Live:** https://colinwww.github.io/open-cinema-studio/ *(goes live on submission night)*. Use Chrome or Edge.
+
+The page is the whole blocking tool: load the **Plaza** preset (or block your own shot), scrub the
+camera, and **Export playblast**, all in your browser. **Render…** needs a render server with a GPU
+behind it; when none answers, the panel shows a **Demo**: the bundled plaza example (layout clip, its
+depth, the look still generated from it and the LTX-2.5 render, all real A40 outputs from `examples/`).
+
+To render your own shots from the live page, start the render server (setup and Comfy targets in
+[Render](#render-comfy-sdk)) so that the page may call it, then paste its URL (`http://127.0.0.1:8190`)
+into **Render server URL**. Chrome may ask to let the page reach devices on your local network: allow it.
+
+```bash
+python -m server.app --cors-origin https://colinwww.github.io     # + --comfy-url for your own ComfyUI
+```
 
 ## How it works
 
@@ -56,6 +75,9 @@ COMFY_API_KEY=comfyui-... python -m server.app                          # Comfy 
 python -m server.app --comfy-url http://127.0.0.1:8189                  # your own ComfyUI + comfy-api-proxy
 COMFY_API_KEY=<proxy token> python -m server.app --comfy-url https://<pod>-8189.proxy.runpod.net   # RunPod
 ```
+
+`--cors-origin <origin>` lets a page served from elsewhere (the live link) call the server; `--host 0.0.0.0`
+listens beyond localhost (e.g. on a pod, then use its `https://<pod>-8190.proxy.runpod.net` URL).
 
 Then in `web/` (`npm run dev`) press **Render…**, write a one- or two-sentence prompt describing the
 finished shot, and press **Generate look still**: the panel exports the playblast (only if the scene
