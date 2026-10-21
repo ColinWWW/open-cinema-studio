@@ -17,10 +17,12 @@ Needs Node 22, Python 3.10+ and `ffmpeg` on the PATH. `demo/` is in `.gitignore`
 |---|---|
 | ![Hook](frames/hook.jpg) | ![Block](frames/block.jpg) |
 | ![Render panel in demo mode](frames/render_panel.jpg) | ![Look stills](frames/look_stills.jpg) |
-| ![Sequence](frames/sequence.jpg) | ![End card](frames/end_card.jpg) |
+| ![Stand-ins can move: the walk beat](frames/walk.jpg) | ![Walk layout and render](frames/walk_render.jpg) |
+| ![Four moves](frames/four_moves.jpg) | ![End card](frames/end_card.jpg) |
 
 <sub>Frames from a run on Windows in Edge (`CHROMIUM_PATH=".../msedge.exe"`, which has the H.264 encoder, so the
-real playblast beat is in) with the Oct 21 A40 renders; `frames/` holds these only for this page.</sub>
+real playblast beat is in) with the Oct 21 A40 renders; the walk and four-moves frames are from a Linux run in
+Playwright's Chromium. `frames/` holds these only for this page.</sub>
 
 ## What each script does
 
@@ -31,6 +33,7 @@ one video and writes each beat's start and end to `beats.json`:
 | Beat | Steps |
 |---|---|
 | `block` | Load the Plaza preset, add a box and a person and place them, *Look through shot camera*, *Apply move: Orbit right*, Space to play |
+| `walk` | Frame 0, click the person, *◆ Key move*, the last frame, move it in the inspector (it walks behind the box to the kiosk), Space to play |
 | `playblast` | *Export playblast*: the progress bar, then the MP4, frame 0 and depth links |
 | `render` | *Render…* with no server, so it opens in demo mode on the bundled plaza example; pick a prompt idea |
 
@@ -47,11 +50,12 @@ puts layout and render side by side for the render beats:
 |---|---|---|
 | 0:00 | Hook | layout ∣ render, plaza dolly-in |
 | 0:08 | Block | `block` beat |
-| 0:30 | Playblast | `playblast` beat, then layout clip ∣ frame 0 ∣ depth |
-| 0:40 | Art-direct | `render` beat, then depth and three look stills (day, night, snow) |
-| 1:00 | Render | layout ∣ render, then stage 2 at 1920×1088 |
-| 1:15 | A scene, not a clip | 4-shot layout sequence ∣ 4-shot render |
-| 1:30 | Same blocking, any look | `three_looks_plaza.mp4` (2×2) |
+| 0:28 | Stand-ins can move | `walk` beat, then walk layout ∣ render |
+| 0:43 | Playblast | `playblast` beat, then layout clip ∣ frame 0 ∣ depth |
+| 0:51 | Art-direct | `render` beat, then depth and three look stills (day, night, snow) |
+| 1:07 | Render | layout ∣ render, then stage 2 at 1920×1088 |
+| 1:19 | Four moves, four places | `four_moves.mp4` (2×2, layout insets) |
+| 1:32 | Same blocking, any look | `three_looks_plaza.mp4` (2×2) |
 | 1:45 | How it's built | title card with the live link and repo |
 
 Options: `--raw <dir>`, `-o <file>`. It fails if the result runs over 2:00. To change a caption or a
@@ -67,7 +71,7 @@ timing, edit `parts()` in `assemble.py` and the table in DEMO_SCRIPT.md together
   panel's H.264 clips, so the demo panel's videos stay black in its recording.
 - **Pace.** Each beat is fitted to its slot: a recording that ran slow is sped up, a quick one holds
   its last frame. On a machine without a GPU browser (software WebGL at a few frames a second) the
-  `block` beat records at about 70 s and plays back about 3× faster; with a GPU it records close to
-  its 22 s slot. `record.mjs` prints the page's frame rate when it starts.
+  `block` beat records at about 75 s and plays back about 4× faster (`walk`: about 43 s, 5×); with a GPU
+  they record close to their 20 s and 8 s slots. `record.mjs` prints the page's frame rate when it starts.
 - No voice-over: the captions carry the script. Add audio afterwards with
   `ffmpeg -i demo/demo.mp4 -i vo.wav -c:v copy -c:a aac -shortest demo/demo_vo.mp4`.
