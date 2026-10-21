@@ -81,11 +81,12 @@ Each submit is a paid job on the visitor's account; nothing in the page retries 
   sent only to the URL shown. *Generate look still*, *3 variants*, *Render shot* and *Cancel* work on
   either target. *Render all shots* stays server-only, because it needs ffmpeg to cut the shots
   together.
-- `worker/`: the relay. It forwards `/api/v2/*` to Comfy Cloud for allowlisted page origins only,
-  passes on just `Authorization`, `Content-Type`, `Idempotency-Key`, `Accept`, `Range` and
+- `worker/`: the relay. It forwards only the six Comfy API v2 calls the page makes, with a key, to
+  Comfy Cloud for allowlisted page origins only, refuses uploads over 50 MB, passes on just `Authorization`, `Content-Type`, `Idempotency-Key`, `Accept`, `Range` and
   `If-None-Match`, drops cookies, follows the signed-storage redirect on downloads **without** the
-  key, and adds CORS headers. It has no storage bindings, no `console` calls, and Workers
-  observability is off, so it keeps and logs nothing.
+  key (and only to https), and adds CORS headers. It has no storage bindings, no `console` calls, and Workers
+  observability is off, so it keeps and logs nothing. The threat model and the Oct 21 security
+  review are in [SECURITY.md](SECURITY.md).
 - Tests: `web/test/cloud.test.js` (client and graphs, mocked fetch) and `web/test/worker.test.js`
   (relay, stubbed upstream), both in `npm test`.
 
@@ -116,7 +117,12 @@ put it in the README next to the live link once it's deployed.
 Notes:
 - The relay never sees a key unless a visitor sends one, and only in flight. Anyone can fake an
   `Origin` header outside a browser, so the allowlist stops other *web pages* from using the relay,
-  not scripts. A script gains nothing from it, though: it can call Comfy Cloud directly with its own key.
+  not scripts. A script gains nothing from it, though: the relay only makes the page's own calls, with
+  the caller's own key, which it could send to Comfy Cloud directly.
+- Whoever deploys the relay could change it to log keys, so visitors should use one they trust.
+  Every Pages site under `https://colinwww.github.io` shares one origin (and one `localStorage`); a
+  custom domain for the live page, alone in `ALLOWED_ORIGINS`, keeps the key to this page only. See
+  [SECURITY.md](SECURITY.md).
 - `UPSTREAM` defaults to `https://cloud.comfy.org`. Point it at a deployment URL if Comfy gives you one.
 
 ## The one test to run
