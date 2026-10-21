@@ -36,7 +36,7 @@ of Oct 29 through the [form](https://form.typeform.com/to/V1dSQrkS). Rules and D
 - [x] On the pod first: `python -m server.doctor --comfyui http://127.0.0.1:8188` (all good, Oct 21)
 - [x] README: "Same blocking, three looks" block uncommented
 - [ ] Note where `examples/look_plaza.jpg` came from in the licence audit
-- [ ] Project name decided (README says "Name TBD")
+- [ ] Project name decided (README says "Name TBD"): shortlist and pick in [NAMES.md](NAMES.md)
 - [ ] Form text from [WRITEUP.md](WRITEUP.md), with the name and links filled in
 - [ ] Demo video recorded and uploaded
 - [ ] Repo public → Pages enabled → *Deploy to GitHub Pages* run → live link checked in Chrome
