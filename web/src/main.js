@@ -6,7 +6,8 @@ import { ClayWorld, ShiftCamera, createRenderer } from './clay.js';
 import { canExport, exportPlayblast } from './exporter.js';
 import { PRESETS, newId, normalizeScene } from './presets.js';
 import { demoUrls } from './demo.js';
-import { initRenderPanel } from './render.js';
+import { initRenderPanel, loadServer } from './render.js';
+import { initReplay, loadSeen, shouldAutoOpen } from './replay.js';
 import { addShot, moveShot, removeShot, rescaleShots, selectShot, shotStem } from './shots.js';
 import { FRAME_COUNTS, RESOLUTIONS } from './spec.js';
 
@@ -15,7 +16,9 @@ const STORAGE_KEY = 'ocs.scene.v1';
 const FAR_TARGET = 20; // shot-camera targets further than this get pulled in when piloting, so orbiting feels like looking around
 
 // ---------- state ----------
-let scene = loadSaved() ?? normalizeScene(PRESETS.blocks.make());
+const savedScene = loadSaved();
+let scene = savedScene ?? normalizeScene(PRESETS.blocks.make());
+let edited = Boolean(savedScene); // the demo replay only swaps in the plaza while this is false
 let frame = 0;
 let selectedId = null;
 let pilot = false;
@@ -69,6 +72,7 @@ function loadSaved() {
 }
 let saveTimer = 0;
 function save() {
+  edited = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
@@ -681,12 +685,23 @@ if (!canExport()) {
   $('export').title = 'Needs a browser with WebCodecs (Chrome or Edge)';
 }
 
+const demo = demoUrls(import.meta.env.BASE_URL);
 initRenderPanel({
   getScene: () => scene,
   showShot,
   exportPlayblast: runExport,
-  demo: demoUrls(import.meta.env.BASE_URL),
+  demo,
   proxied: import.meta.env.DEV, // the dev server forwards /api to the render server
+});
+
+// The demo replay loads the plaza behind itself, but never over a scene the user has worked on.
+initReplay({
+  demo,
+  onStart: () => {
+    if (!edited) loadScene(PRESETS.plaza.make());
+  },
+  onRender: () => $('render-open').click(),
+  autoOpen: shouldAutoOpen({ dev: import.meta.env.DEV, server: loadServer(), seen: loadSeen() }),
 });
 
 // Hook for scripted checks.

@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 
 from server.mock_comfyui import REQUIRED, validate
-from server.render import png_size, prompt_warnings
-from server.workflow import (LOOK_NODES, NODES, WORKFLOW_FILES, build_look_still, build_stage1, check_dims,
-                             look_size, stage1_size)
+from server.render import png_size, progress_fields, prompt_warnings, uses_stage2
+from server.workflow import (LOOK_NODES, NODES, STAGE2_SIGMAS, WORKFLOW_FILES, build_look_still, build_stage1,
+                             build_two_stage, check_dims, look_size, stage1_size)
 from server.tests.pngs import gray_png
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +57,50 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(png_size(gray_png(96, 64)), (96, 64))
         with self.assertRaises(ValueError):
             png_size(b"GIF89a" + bytes(30))
+
+
+class TwoStageWorkflowTest(unittest.TestCase):
+    def setUp(self):
+        self.g = build_two_stage(prompt="a plaza", frames=97, seed=7)
+
+    def test_graph_passes_mock_validation(self):
+        errors = validate(self.g, inputs_dir=Path("/nonexistent"))
+        self.assertEqual(sorted(errors), [NODES["layout"], NODES["look"]])
+
+    def test_only_core_nodes(self):
+        self.assertTrue({n["class_type"] for n in self.g.values()} <= set(REQUIRED))
+
+    def test_stage2_follows_stage1(self):
+        g = self.g
+        lat = g[NODES["latent"]]["inputs"]
+        self.assertEqual((lat["width"], lat["height"], lat["length"]), (960, 544, 97))  # stage 1 at half size
+        up = next(n["inputs"] for n in g.values() if n["class_type"] == "LTXVLatentUpsampler")
+        self.assertEqual(g[up["samples"][0]]["class_type"], "LTXVCropGuides")  # guide frames dropped first
+        sigmas = [n["inputs"]["sigmas"] for n in g.values() if n["class_type"] == "ManualSigmas"]
+        self.assertEqual(sigmas[1], STAGE2_SIGMAS)
+        self.assertEqual(len(STAGE2_SIGMAS.split(",")) - 1, 3)  # 3 refine steps
+        # the decoders read stage 2's output, and the look still goes back on frame 0
+        decode = next(n["inputs"] for n in g.values() if n["class_type"] == "VAEDecodeTiled")
+        self.assertEqual(g[g[decode["samples"][0]]["inputs"]["av_latent"][0]]["_meta"]["title"], "Sample stage 2")
+        self.assertEqual(len([n for n in g.values() if n["class_type"] == "LTXVImgToVideoInplace"]), 2)
+        self.assertEqual(g[NODES["seed"]]["inputs"]["noise_seed"], 7)
+        self.assertIn("two-stage", g[NODES["output"]]["inputs"]["filename_prefix"])
+
+    def test_stage1_unchanged(self):
+        self.assertNotIn("LTXVLatentUpsampler", {n["class_type"] for n in build_stage1().values()})
+
+    def test_when_stage2_runs(self):
+        self.assertTrue(uses_stage2(1920, 1088))
+        self.assertFalse(uses_stage2(1920, 1088, two_stage=False))
+        self.assertFalse(uses_stage2(960, 576))
+
+    def test_progress_names_the_node(self):
+        class Ev:
+            value, current_node, step, steps = 0.5, "76", 2, 3
+        self.assertEqual(progress_fields(Ev, {"76": "Sample stage 2"}),
+                         {"stage": "rendering", "progress": 0.5, "node": "Sample stage 2", "step": 2, "steps": 3})
+        Ev.current_node, Ev.steps = None, None
+        self.assertEqual(progress_fields(Ev, {}), {"stage": "rendering", "progress": 0.5})
 
 
 class LookStillWorkflowTest(unittest.TestCase):

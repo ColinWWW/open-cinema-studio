@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   apiUrl, aspectWarning, checkHealth, describeState, loadServer, lookForm, normalizeServer, promptWarnings, renderForm,
-  runJob, runRender, saveServer, serverCommand, stitchShots,
+  cancelJob, runJob, runRender, saveServer, serverCommand, stitchShots,
 } from '../src/render.js';
 
 test('promptWarnings flags empty prompts and layout words', () => {
@@ -58,6 +58,20 @@ test('describeState reads well', () => {
   assert.equal(describeState({ status: 'succeeded', seconds: 161 }), 'Done in 161s');
   assert.match(describeState({ status: 'running', stage: 'rendering', progress: 0.25 }), /^Rendering 25%/);
   assert.equal(describeState({ status: 'failed', error: 'boom' }), 'Failed: boom');
+  assert.equal(describeState({ status: 'cancelled', error: 'cancelled' }), 'Cancelled');
+  assert.match(describeState({ status: 'running', stage: 'rendering', progress: 0.5, node: 'Sample stage 2', step: 2, steps: 3 }),
+    /^Rendering 50% · Sample stage 2, step 2\/3 \(/);
+});
+
+test('cancelJob posts to the job and accepts one that already ended', async () => {
+  const calls = [];
+  const fetchFn = async (url, opts) => {
+    calls.push([url, opts.method]);
+    return new Response(JSON.stringify({ status: url.includes('done') ? 'succeeded' : 'cancelled' }), { status: url.includes('done') ? 409 : 200 });
+  };
+  assert.equal((await cancelJob('render', 'abc', { server: 'http://h:8190', fetchFn })).status, 'cancelled');
+  assert.deepEqual(calls[0], ['http://h:8190/api/render/abc/cancel', 'POST']);
+  assert.equal((await cancelJob('look', 'done', { fetchFn })).status, 'succeeded');
 });
 
 test('lookForm carries the depth map and the clip size', () => {

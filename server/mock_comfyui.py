@@ -52,6 +52,9 @@ REQUIRED = {
     "LTXVAudioVAEDecode": ["samples", "audio_vae"],
     "CreateVideo": ["images", "fps"],
     "SaveVideo": ["video", "filename_prefix", "format"],
+    # stage 2 (x2 latent upscale + refine)
+    "LatentUpscaleModelLoader": ["model_name"],
+    "LTXVLatentUpsampler": ["samples", "upscale_model", "vae"],
     # look still (Z-Image-Turbo + Fun ControlNet Union)
     "ModelPatchLoader": ["name"],
     "ImageScale": ["image", "upscale_method", "width", "height", "crop"],

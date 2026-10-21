@@ -47,3 +47,12 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Smoke test of the Pages build (Playwright, in the runner's Chrome so the H.264 demo clips decode)
+        run: npm run test:e2e
+        env:
+          PW_CHANNEL: chrome
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: web/test-results/
