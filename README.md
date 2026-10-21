@@ -89,7 +89,11 @@ In Windows PowerShell 5.1, which has no `&&`, use `;` instead: `cd web; npm inst
 Open http://localhost:5173, add boxes, people and walls, then turn on **Look through shot camera**,
 frame the shot and press **K** to key it on the timeline. Or frame frame 0 and pick a one-click move under
 **Apply move**: dolly in/out, truck, crane, orbit or locked off. A scene can hold several **shots** (cameras
-over the same blocking): **+ Shot** copies the current one, ↑/↓ set the order of the cut. **Export playblast** renders every frame at
+over the same blocking): **+ Shot** copies the current one, ↑/↓ set the order of the cut. Stand-ins can move
+too: select one, press **◆ Key move** (<kbd>Shift</kbd>+<kbd>K</kbd>), go to another frame and drag it there,
+and it walks there at a steady speed. Each drag on any frame keys it there, and its path shows in blue. The
+move is part of the blocking, so every shot sees it, and the playblast (and so the render) moves with it.
+**Export playblast** renders every frame at
 exactly 1/24 s steps to an H.264 MP4 (960×576 or 1920×1088, 65/97/121 frames) plus PNGs of frame 0 and
 its depth map (near = white, sky = black).
 With the dev server running, exports are also written to `web/exports/`. Scenes save as JSON;

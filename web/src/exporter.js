@@ -96,6 +96,7 @@ export async function exportPlayblast(world, scene, { onProgress } = {}) {
   let depth = null;
   try {
     for (let i = 0; i < frames; i++) {
+      world.poseObjects(scene.objects, i); // moving stand-ins
       world.applyShot(scene.camera, poseAt(scene.camera.keys, i, scene.camera.ease), width / height);
       renderer.render(world.scene, world.shotCam);
       if (i === 0) {

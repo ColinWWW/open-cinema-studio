@@ -4,6 +4,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { MOVES, cameraMove, poseAt, removeKey, setKey, sortKeys } from './cameraPath.js';
 import { ClayWorld, ShiftCamera, createRenderer } from './clay.js';
 import { canExport, exportPlayblast } from './exporter.js';
+import { editObjectPose, isAnimated, keyObject, objectPath, objectPoseAt, offsetObject, unkeyObject } from './objectPath.js';
 import { PRESETS, newId, normalizeScene } from './presets.js';
 import { demoUrls } from './demo.js';
 import { confirmDialog } from './dialog.js';
@@ -62,6 +63,16 @@ camGlyph.add(keyDots);
 const keyDotGeo = new THREE.OctahedronGeometry(0.12);
 const keyDotMat = new THREE.MeshBasicMaterial({ color: 0xf0b429, fog: false });
 
+// The selected stand-in's path, when it moves (in world.helpers: editor views only, never the inset or a playblast).
+const OBJ_PATH = 0x4cc9f0;
+const objPath = new THREE.Group();
+world.helpers.add(objPath);
+const objPathLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: OBJ_PATH, depthTest: false }));
+objPathLine.renderOrder = 1;
+const objKeyDots = new THREE.Group();
+objPath.add(objPathLine, objKeyDots);
+const objKeyMat = new THREE.MeshBasicMaterial({ color: OBJ_PATH, fog: false, depthTest: false });
+
 // ---------- persistence ----------
 function loadSaved() {
   try {
@@ -89,7 +100,7 @@ function loadScene(next) {
   scene = normalizeScene(next);
   frame = 0;
   select(null);
-  world.syncObjects(scene.objects);
+  world.syncObjects(scene.objects, frame);
   world.setFog(scene.fog);
   if (pilot) enterPilotPose();
   refreshAll();
@@ -106,6 +117,16 @@ function select(id) {
   if (mesh) transform.attach(mesh);
   else transform.detach();
   refreshInspector();
+  refreshObjectPath();
+  refreshTimeline();
+}
+
+/** The selected object was moved or turned on this frame: a moving one gets keyed here (objectPath.js). */
+function moveSelected(obj, pose) {
+  editObjectPose(obj, frame, pose);
+  world.applyObject(world.meshes.get(obj.id), obj, frame);
+  refreshObjectPath();
+  refreshTimeline();
 }
 
 function onTransformChange() {
@@ -113,13 +134,12 @@ function onTransformChange() {
   const mesh = obj && world.meshes.get(obj.id);
   if (!mesh) return;
   if (mesh.position.y < 0) mesh.position.y = 0; // keep things on or above the floor
-  obj.position = mesh.position.toArray();
-  obj.rotation = [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z];
   obj.scale = mesh.scale.toArray().map((v) => Math.max(0.01, v));
+  moveSelected(obj, { position: mesh.position.toArray(), rotation: [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z] });
   refreshInspector();
   save();
 }
-transform.addEventListener('mouseUp', () => world.fitShadow());
+transform.addEventListener('mouseUp', () => world.fitShadow(scene.objects));
 
 function floorPointInView() {
   const ray = new THREE.Raycaster();
@@ -137,7 +157,7 @@ function addObject(type) {
   const n = scene.objects.filter((o) => o.type === type).length + 1;
   const obj = { id: newId(), name: `${LABEL[type]} ${n}`, type, position: floorPointInView(), rotation: [0, 0, 0], scale: [...DEFAULT_SCALE[type]], grey: 0.8 };
   scene.objects.push(obj);
-  world.syncObjects(scene.objects);
+  world.syncObjects(scene.objects, frame);
   select(obj.id);
   save();
 }
@@ -148,9 +168,9 @@ function duplicateSelected() {
   const copy = structuredClone(obj);
   copy.id = newId();
   copy.name = `${obj.name} copy`;
-  copy.position[0] += 1;
+  offsetObject(copy, [1, 0, 0]); // a moving one keeps its path, beside the original's
   scene.objects.push(copy);
-  world.syncObjects(scene.objects);
+  world.syncObjects(scene.objects, frame);
   select(copy.id);
   save();
 }
@@ -159,8 +179,59 @@ function deleteSelected() {
   if (!selectedId) return;
   scene.objects = scene.objects.filter((o) => o.id !== selectedId);
   select(null);
-  world.syncObjects(scene.objects);
+  world.syncObjects(scene.objects, frame);
   save();
+}
+
+// ---------- moving stand-ins ----------
+/** Shift+K / "◆ Key move": key the selected object where it is, on this frame. A still object becomes a moving
+ *  one, keyed where it stands on frame 0 and on this frame (the last frame, from frame 0); from then on every
+ *  move of it on any frame keys it there, so: Key move, go to another frame, drag it, and it walks there. */
+function keySelected() {
+  const obj = selected();
+  if (!obj) return flash('Select a box, person or wall to key it');
+  const mesh = world.meshes.get(obj.id);
+  const now = { position: mesh.position.toArray().map(round), rotation: [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z] };
+  const starting = !isAnimated(obj);
+  const at = starting && frame === 0 ? lastFrame() : frame;
+  keyObject(obj, at, now);
+  world.applyObject(mesh, obj, frame);
+  world.fitShadow(scene.objects);
+  refreshObjectPath();
+  refreshTimeline();
+  refreshInspector();
+  flash(starting
+    ? `${obj.name} can move now: go to another frame and drag it there (keyed at 0 and ${at})`
+    : `Keyed ${obj.name} at frame ${frame}`);
+  save();
+}
+
+function unkeySelected() {
+  const obj = selected();
+  if (!obj || !isAnimated(obj) || !obj.keys.some((k) => k.frame === frame)) return flash('No key for the selected object on this frame');
+  unkeyObject(obj, frame);
+  world.applyObject(world.meshes.get(obj.id), obj, frame);
+  refreshObjectPath();
+  refreshTimeline();
+  refreshInspector();
+  flash(isAnimated(obj) ? `Removed ${obj.name}'s key at frame ${frame}` : `${obj.name} no longer moves`);
+  save();
+}
+
+/** Draw the selected object's path and keys (editor views only). */
+function refreshObjectPath() {
+  const obj = selected();
+  const pts = obj ? objectPath(obj, scene.output.frames) : [];
+  objPath.visible = pts.length > 0;
+  objPathLine.geometry.dispose();
+  objPathLine.geometry = new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(p[0], p[1] + 0.05, p[2])));
+  objKeyDots.clear();
+  for (const k of obj && isAnimated(obj) ? obj.keys : []) {
+    const dot = new THREE.Mesh(keyDotGeo, objKeyMat);
+    dot.position.set(k.position[0], k.position[1] + 0.05, k.position[2]);
+    objKeyDots.add(dot);
+  }
+  $('obj-key-del').disabled = !obj || !isAnimated(obj);
 }
 
 // ---------- shot camera ----------
@@ -225,15 +296,21 @@ function deleteKey() {
   save();
 }
 
+/** ⏮/⏭: the previous/next camera key, or key of the selected moving object. */
 function jumpKey(dir) {
-  const frames = sortKeys(scene.camera.keys).map((k) => k.frame);
+  const obj = selected();
+  const keys = [...scene.camera.keys, ...(obj && isAnimated(obj) ? obj.keys : [])];
+  const frames = [...new Set(sortKeys(keys).map((k) => k.frame))];
   const next = dir > 0 ? frames.find((f) => f > frame) : frames.reverse().find((f) => f < frame);
   if (next !== undefined) setFrame(next);
 }
 
 function setFrame(f) {
   frame = Math.max(0, Math.min(lastFrame(), Math.round(f)));
+  world.poseObjects(scene.objects, frame);
   if (pilot) enterPilotPose();
+  const obj = selected();
+  if (obj && isAnimated(obj)) refreshInspector(true); // its position fields follow it along the path
   refreshTimeline();
   refreshHud();
 }
@@ -259,6 +336,7 @@ function refreshAll() {
   refreshInspector();
   refreshCameraFields();
   refreshCameraPath();
+  refreshObjectPath();
   refreshTimeline();
   refreshHud();
 }
@@ -268,17 +346,28 @@ function refreshHeader() {
   $('frames').value = String(scene.output.frames);
 }
 
-function refreshInspector() {
+/** `onFrameChange`: the frame moved under a moving stand-in, so its fields follow it even while one has focus. */
+function refreshInspector(onFrameChange = false) {
   const obj = selected();
   $('inspector').hidden = !obj;
   $('sel-label').textContent = obj ? obj.name : 'nothing selected';
   if (!obj) return;
   $('obj-name').value = obj.name;
+  const shown = { ...obj, ...objectPoseAt(obj, frame) }; // a moving stand-in shows where it is on this frame
+  const typing = (el) => document.activeElement === el && !onFrameChange; // don't overwrite what's being typed
   for (const input of document.querySelectorAll('#inspector [data-field]')) {
-    if (document.activeElement !== input) input.value = round(obj[input.dataset.field][+input.dataset.i]);
+    if (!typing(input)) input.value = round(shown[input.dataset.field][+input.dataset.i]);
   }
-  if (document.activeElement !== $('obj-roty')) $('obj-roty').value = Math.round(THREE.MathUtils.radToDeg(obj.rotation[1]));
+  if (!typing($('obj-roty'))) $('obj-roty').value = Math.round(THREE.MathUtils.radToDeg(shown.rotation[1]));
   $('obj-grey').value = obj.grey;
+  const moving = isAnimated(obj);
+  $('obj-key').textContent = moving ? '◆ Key here' : '◆ Key move';
+  $('obj-key').title = moving
+    ? 'Shift+K: key it where it is on this frame (moving it on any frame keys it there anyway)'
+    : 'Shift+K: make it move. Keys it where it stands now, then drag it on another frame and it walks there';
+  $('obj-motion').textContent = moving
+    ? `Moves: ${obj.keys.length} keys (${obj.keys.map((k) => k.frame).join(', ')}). Drag it on any frame to key it there.`
+    : 'Still. Key move, then drag it on another frame, and it walks there.';
 }
 
 function refreshShots() {
@@ -296,6 +385,7 @@ function refreshShots() {
 function changeShots(fn) {
   fn(scene);
   frame = 0;
+  world.poseObjects(scene.objects, frame);
   if (pilot) enterPilotPose();
   refreshAll();
   save();
@@ -319,9 +409,13 @@ function refreshTimeline() {
   slider.max = String(last);
   slider.value = String(frame);
   $('frame-label').textContent = `${frame} / ${last}`;
-  $('key-marks').innerHTML = scene.camera.keys
-    .map((k) => `<span style="left:${(100 * k.frame) / Math.max(1, last)}%" title="key @ ${k.frame}"></span>`)
-    .join('');
+  const mark = (k, cls, what) =>
+    `<span class="${cls}" style="left:${(100 * k.frame) / Math.max(1, last)}%" title="${what} key @ ${k.frame}"></span>`;
+  const obj = selected();
+  $('key-marks').innerHTML = [
+    ...scene.camera.keys.map((k) => mark(k, '', 'camera')),
+    ...(obj && isAnimated(obj) ? obj.keys.map((k) => mark(k, 'obj', 'object')) : []), // the selected stand-in's keys
+  ].join('');
 }
 
 let flashMsg = '';
@@ -474,10 +568,11 @@ $('resolution').addEventListener('change', (e) => {
 for (const n of FRAME_COUNTS) $('frames').add(new Option(`${n} (${(n / 24).toFixed(1)} s)`, String(n)));
 $('frames').addEventListener('change', (e) => {
   const n = Number(e.target.value);
-  rescaleShots(scene, scene.output.frames, n);
+  rescaleShots(scene, scene.output.frames, n); // camera keys and moving stand-ins' keys
   scene.output.frames = n;
   setFrame(Math.min(frame, n - 1));
   refreshCameraPath();
+  refreshObjectPath();
   refreshTimeline();
   save();
 });
@@ -522,9 +617,16 @@ for (const input of document.querySelectorAll('#inspector [data-field]')) {
     const obj = selected();
     const v = parseFloat(input.value);
     if (!obj || !Number.isFinite(v)) return;
-    obj[input.dataset.field][+input.dataset.i] = input.dataset.field === 'scale' ? Math.max(0.01, v) : v;
-    world.applyObject(world.meshes.get(obj.id), obj);
-    world.fitShadow();
+    const i = +input.dataset.i;
+    if (input.dataset.field === 'scale') {
+      obj.scale[i] = Math.max(0.01, v);
+      world.applyObject(world.meshes.get(obj.id), obj, frame);
+    } else {
+      const pose = objectPoseAt(obj, frame); // position on this frame: a moving stand-in gets keyed here
+      pose.position[i] = v;
+      moveSelected(obj, pose);
+    }
+    world.fitShadow(scene.objects);
     save();
   });
 }
@@ -532,17 +634,20 @@ $('obj-roty').addEventListener('input', (e) => {
   const obj = selected();
   const v = parseFloat(e.target.value);
   if (!obj || !Number.isFinite(v)) return;
-  obj.rotation[1] = THREE.MathUtils.degToRad(v);
-  world.applyObject(world.meshes.get(obj.id), obj);
+  const pose = objectPoseAt(obj, frame);
+  pose.rotation[1] = THREE.MathUtils.degToRad(v);
+  moveSelected(obj, pose);
   save();
 });
 $('obj-grey').addEventListener('input', (e) => {
   const obj = selected();
   if (!obj) return;
   obj.grey = parseFloat(e.target.value);
-  world.applyObject(world.meshes.get(obj.id), obj);
+  world.applyObject(world.meshes.get(obj.id), obj, frame);
   save();
 });
+$('obj-key').addEventListener('click', keySelected);
+$('obj-key-del').addEventListener('click', unkeySelected);
 
 $('pilot').addEventListener('click', () => setPilot(!pilot));
 $('shot').addEventListener('change', (e) => changeShots((s) => selectShot(s, Number(e.target.value))));
@@ -604,6 +709,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'delete' || k === 'backspace') deleteSelected();
   else if (k === 'escape') select(null);
   else if (k === 'c') setPilot(!pilot);
+  else if (k === 'k' && e.shiftKey) keySelected(); // Shift+K: key the selected stand-in
   else if (k === 'k') keyCamera();
   else if (k === ' ') {
     e.preventDefault();
@@ -676,6 +782,7 @@ async function runExport() {
     throw err;
   } finally {
     exporting = false;
+    world.poseObjects(scene.objects, frame); // the exporter walked the stand-ins through every frame
     $('export').disabled = false;
   }
 }
@@ -718,7 +825,7 @@ window.ocs = {
 };
 
 // ---------- go ----------
-world.syncObjects(scene.objects);
+world.syncObjects(scene.objects, frame);
 world.setFog(scene.fog);
 refreshAll();
 requestAnimationFrame(tick);
