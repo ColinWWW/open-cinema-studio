@@ -19,9 +19,9 @@ follows that camera move and layout. Real A40 output, stage 1, from <code>exampl
 
 > Status: both pipelines pass on an A40. The look still (Z-Image-Turbo + depth ControlNet) is generated from the
 > layout's own depth, so it lines up box for box, and the stage-1 video render from it keeps both the look and the
-> layout (see [Examples](#examples)). Stage 2 (1920×1088: an x2 latent upscale and 3 refine steps) is built from core nodes and current ComfyUI
-> accepts the graph, but it hasn't been run on the GPU yet. Plan, specs and budget:
-> [docs/PLAN.md](docs/PLAN.md).
+> layout (see [Examples](#examples)). Stage 2 (1920×1088: an x2 latent upscale and 3 refine steps) runs on the
+> A40 too: 97 frames in about 6 minutes, and it holds the layout at full resolution. Stage 1 also handles
+> 121 frames (5 s) in about 4 minutes. Plan, specs and budget: [docs/PLAN.md](docs/PLAN.md).
 
 ## Try it
 
@@ -52,12 +52,21 @@ All from the same plaza layout on an A40, stage 1 (960×576, 65 frames). Click a
 
 - Layout clip, frame by frame: [contact sheet](examples/layout_plaza_dolly_in_frames.png)
 - Render from the generated look still: [contact sheet](examples/stage1_genlook_plaza_frames.png)
-<!-- Same blocking, three looks: uncomment once `python scripts/three_looks.py` has run on the GPU.
+
 <p align="center"><img src="docs/media/three_looks.gif" width="100%" alt="Top left: the grey plaza layout. The other three: LTX-2.5 renders of the same layout and camera move as a sunny day, a rainy night and a snowy dusk."></p>
 <p align="center"><sub>One layout, three prompts: same blocking and camera, only the look changes (<code>scripts/three_looks.py</code>).</sub></p>
--->
 
 - Render from a reference photo instead ([`look_plaza.jpg`](examples/look_plaza.jpg)): [contact sheet](examples/stage1_core_plaza_frames.png)
+- A four-shot sequence from **Render all shots** (dolly in, orbit right, crane up, truck right, cut together):
+  [`sequence_plaza_4shots_a40.mp4`](examples/sequence_plaza_4shots_a40.mp4), layout cut
+  [`sequence_plaza_4shots_layout.mp4`](examples/sequence_plaza_4shots_layout.mp4)
+- Stage 2 at 1920×1088, 97 frames: [`two_stage_plaza_1920_a40.mp4`](examples/two_stage_plaza_1920_a40.mp4)
+  (look still [`look_gen_plaza_1920_a40.png`](examples/look_gen_plaza_1920_a40.png))
+- Stage 1 at 121 frames (5 s): [`stage1_plaza_121f_a40.mp4`](examples/stage1_plaza_121f_a40.mp4)
+
+A look still that names something the layout doesn't have (a clock tower where the layout has sky) puts it
+there anyway, and the render follows the still rather than the layout. If a still drifts, change the seed
+or describe what the boxes are.
 
 ## How it works
 

@@ -25,7 +25,7 @@ DEPTH = EX / "layout_plaza_dolly_in_depth.png"
 LOOKS = {
     "day": "A sunny stone plaza with a glass office tower, an iron lamp post, stacked wooden crates and a white market kiosk, slow push-in.",
     "night": "A rainy night plaza lit by a single street lamp, wet cobblestones reflecting neon from a closed kiosk, crates stacked in the shadows, slow push-in.",
-    "snow": "A snowy winter square at dusk with a brick clock tower, a glowing lamp post and a wooden market stall dusted with snow, gentle camera push.",
+    "snow": "A snowy winter square at dusk with a tall brick building, a glowing lamp post, crates dusted with snow and a wooden market stall, gentle camera push.",
 }
 
 
@@ -42,7 +42,7 @@ def paths(name):
     return EX / f"look_{name}_plaza.png", EX / f"stage1_{name}_plaza_a40.mp4"
 
 
-def render_commands(seed=42):
+def render_commands(seed=2024):
     """The look-still and render command for each look, in order."""
     cmds = []
     for name, prompt in LOOKS.items():
@@ -79,7 +79,7 @@ def build_grid(width=480):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--seed", type=int, default=2024, help="2024 keeps all three looks on the layout (42 drifts at night)")
     ap.add_argument("--dry-run", action="store_true", help="print the commands, run nothing")
     ap.add_argument("--grid-only", action="store_true", help="skip rendering; build the grid from existing renders")
     args = ap.parse_args()
