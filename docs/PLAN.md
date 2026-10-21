@@ -37,8 +37,8 @@ not yet confirmed by Comfy: the server uses the official `comfy-sdk` either way 
 `comfy-api-proxy`), and open weights means "can be downloaded and run locally" (guill). Confirmation
 asked on Discord; until it comes, keep the README showing both targets (Comfy Cloud first, self-hosted second).
 
-**Still open (ask as a follow-up):**
-1. Can one entry win a main prize **and** the LTX bonus?
+**Decided (Oct 21):** one entry can win multiple prizes (per Colin), so the Open Weights Only prize and
+the LTX bonus are both in play.
 
 SF Build Night Oct 28 (https://luma.com/5mydmvu6): for debugging with the Comfy team, not for building.
 
