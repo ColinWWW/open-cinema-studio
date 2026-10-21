@@ -1,6 +1,5 @@
 // Deterministic playblast: step the shot exactly 1/fps per frame, render each frame at the output
 // size, and encode to H.264 MP4 in the browser with WebCodecs (no MediaRecorder, no real-time capture).
-import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import * as THREE from 'three';
 import { poseAt } from './cameraPath.js';
 import { createRenderer } from './clay.js';
@@ -70,6 +69,9 @@ export async function exportPlayblast(world, scene, { onProgress } = {}) {
   const config = { codec, width, height, framerate: fps, bitrate: Math.round(width * height * fps * 0.4), latencyMode: 'quality', avc: { format: 'avc' } };
   const support = await VideoEncoder.isConfigSupported(config);
   if (!support.supported) throw new Error(`H.264 ${width}x${height} encoding is not supported in this browser`);
+
+  // Loaded on first export, so the page (and the demo replay that opens first) doesn't wait for it.
+  const { ArrayBufferTarget, Muxer } = await import('mp4-muxer');
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
