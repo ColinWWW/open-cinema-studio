@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { test } from 'node:test';
 import {
   COMFY_CLOUD, LOOK_NODES, NODES, assetRef, buildLookStill, buildStage1, checkDims, cloudLook, cloudRender, comfyClient,
-  loadCloud, lookSize, normalizeBase, panelState, runCloudJob, saveCloud, stage1Size,
+  loadCloud, lookSize, normalizeBase, panelState, redact, runCloudJob, saveCloud, stage1Size,
 } from '../src/cloud.js';
 import { describeState, loadTarget, saveTarget } from '../src/render.js';
 
@@ -61,6 +61,22 @@ test('normalizeBase only sends the key over https (or to this machine)', () => {
   assert.equal(normalizeBase('http://127.0.0.1:8189'), 'http://127.0.0.1:8189');
   assert.throws(() => normalizeBase('http://relay.example.com'), /https/);
   assert.throws(() => normalizeBase('https://u:p@relay.example.com'), /user:password/);
+  // the key pasted into "via" by mistake would go out as a DNS lookup and show on screen
+  assert.throws(() => normalizeBase('comfyui-0123456789abcdef'), /did the key go in/);
+  assert.throws(() => normalizeBase('https://intranet'), /web address/);
+  assert.equal(normalizeBase('http://localhost:8189/'), 'http://localhost:8189');
+});
+
+test('the key is only ever in localStorage under ocs.comfyKey, and Forget key removes it', () => {
+  const local = memory();
+  const session = memory();
+  saveCloud({ key: 'comfyui-test', base: 'https://relay.example.dev' }, local);
+  assert.deepEqual([...local.m.keys()].sort(), ['ocs.comfyBase', 'ocs.comfyKey']);
+  assert.equal(session.m.size, 0);
+  saveCloud({ key: '', base: 'https://relay.example.dev' }, local); // what Forget key saves
+  assert.deepEqual([...local.m.keys()], ['ocs.comfyBase']);
+  assert.equal(loadCloud(local).key, '');
+  assert.ok(![...local.m.values()].some((v) => v.includes('comfyui-test')));
 });
 
 test('the key and the target stay in this browser storage', () => {
@@ -154,6 +170,48 @@ test('comfyClient explains refused keys, unreachable hosts and API errors', asyn
   const err = await comfyClient({ key: 'k', fetchFn: broke }).submit({}).catch((e) => e);
   assert.equal(err.message, 'Node 12: missing input');
   assert.equal(err.code, 'invalid_workflow');
+});
+
+test('the key goes in a header only: never the URL, no cookies, no Referer', async () => {
+  const api = fakeComfy();
+  const seen = [];
+  const spy = async (url, init) => {
+    seen.push({ url: String(url), init });
+    return api.fetchFn(url, init);
+  };
+  const client = comfyClient({ base: 'https://relay.example.dev', key: 'comfyui-test', fetchFn: spy });
+  await client.check();
+  const job = await client.submit({ 60: { inputs: { video: [] } } });
+  await client.getJob(job.id);
+  await client.download('out-1');
+  for (const { url, init } of seen) {
+    assert.ok(url.startsWith('https://relay.example.dev/api/v2/'));
+    assert.ok(!url.includes('comfyui-test'));
+    assert.equal(init.credentials, 'omit');
+    assert.equal(init.referrerPolicy, 'no-referrer');
+  }
+});
+
+test('error text on the page never carries the key and stays one short line', async () => {
+  const key = 'comfyui-secret123';
+  assert.equal(redact(`bad token ${key}\n<img src=x onerror=alert(1)>`, key), 'bad token [your key] <img src=x onerror=alert(1)>');
+  assert.equal(redact('x'.repeat(1000), key).length, 300);
+  const echo = async () => reply({ error: { message: `Bearer ${key} is not valid` } }, 401);
+  const err = await comfyClient({ key, fetchFn: echo }).check().catch((e) => e);
+  assert.doesNotMatch(err.message, /secret123/);
+  assert.match(err.message, /\[your key\] is not valid/);
+  // a browser network error that quotes the request is cleaned the same way
+  const quoting = async (url, init) => { throw new TypeError(`Failed to fetch with ${init.headers.Authorization}`); };
+  const net = await comfyClient({ key, fetchFn: quoting }).check().catch((e) => e);
+  assert.doesNotMatch(net.message, /secret123/);
+  // a key with a stray newline would make fetch throw "invalid header value: Bearer <key>": refused first
+  assert.throws(() => comfyClient({ key: `${key}\n` }), /spaces or unusual characters/);
+  assert.throws(() => comfyClient({ key: 'comfy ui' }), /spaces/);
+  // non-JSON and odd error bodies still give a status line
+  const html = async () => new Response('<html>oops</html>', { status: 502, statusText: 'Bad Gateway' });
+  assert.equal((await comfyClient({ key, fetchFn: html }).check().catch((e) => e)).message, '502 Bad Gateway');
+  const nul = async () => new Response('null', { status: 500, statusText: 'Server Error' });
+  assert.equal((await comfyClient({ key, fetchFn: nul }).check().catch((e) => e)).message, '500 Server Error');
 });
 
 test('cloudRender uploads both files, submits once with an idempotency key, polls, downloads node 60', async () => {
