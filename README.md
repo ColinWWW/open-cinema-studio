@@ -95,8 +95,9 @@ grey layout inset (<code>scripts/four_moves.py</code>). Clips:
 <a href="examples/stage1_tokyo_truck_a40.mp4">Tokyo truck</a>, <a href="examples/stage1_warehouse_dolly_in_a40.mp4">warehouse dolly in</a>.</sub></p>
 
 - Render from a reference photo instead ([`look_plaza.jpg`](examples/look_plaza.jpg)): [contact sheet](examples/stage1_core_plaza_frames.png)
-- A four-shot sequence from **Render all shots** (dolly in, orbit right, crane up, truck right, cut together):
-  [`sequence_plaza_4shots_a40.mp4`](examples/sequence_plaza_4shots_a40.mp4), layout cut
+- A four-shot sequence, made the way **Render all shots** makes one (dolly in, orbit right, crane up, truck right;
+  a look still per shot from the day prompt, seed 2024, then the render; cut together), on an H100 in about 46 s a
+  shot once warm: [`sequence_plaza_4shots_h100.mp4`](examples/sequence_plaza_4shots_h100.mp4), layout cut
   [`sequence_plaza_4shots_layout.mp4`](examples/sequence_plaza_4shots_layout.mp4)
 - Stage 2 at 1920×1088, 97 frames: [`two_stage_plaza_1920_a40.mp4`](examples/two_stage_plaza_1920_a40.mp4)
   (look still [`look_gen_plaza_1920_a40.png`](examples/look_gen_plaza_1920_a40.png))
