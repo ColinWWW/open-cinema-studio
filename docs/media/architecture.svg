@@ -39,7 +39,7 @@
   <!-- 1. Browser -->
   <rect class="box" x="24" y="40" width="250" height="300" rx="10"/>
   <text class="h" x="40" y="68">1. Browser</text>
-  <text class="m code" x="40" y="86">web/ (live page, Chrome or Edge)</text>
+  <text class="m code" x="40" y="86">web/ (the live page)</text>
   <text class="s" x="40" y="120">three.js blocking</text>
   <text class="m" x="40" y="138">grey boxes, keyed camera path,</text>
   <text class="m" x="40" y="154">camera moves, multiple shots</text>
