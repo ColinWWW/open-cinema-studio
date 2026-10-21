@@ -9,7 +9,8 @@ Usage:
   python scripts/make_test_layout.py --move orbit --frames 97 -o examples/layout_orbit.mp4
   python scripts/make_test_layout.py --scene plaza -o examples/layout_plaza_dolly_in.mp4
 
-Also writes <output>_first.png (clay frame 0). Don't use it as the first-frame image:
+Also writes <output>_first.png (clay frame 0) and <output>_depth.png (frame 0's depth, the same map the
+web tool exports, for `python -m server.look`). Don't use _first.png as the first-frame image:
 the model needs a finished-looking image made *from* it, or the result comes out grey.
 """
 
@@ -125,7 +126,8 @@ def hit_boxes(origins, dirs, boxes):
     return best_t, best_n, best_g
 
 
-def render(eye, target, width, height, fov_deg, scene="blocks"):
+def cast(eye, target, width, height, fov_deg, scene):
+    """Ray directions and the nearest hit per pixel (boxes or floor): (dirs, t, normal, grey)."""
     sc = SCENES[scene]
     dirs = ray_dirs(eye, target, width, height, fov_deg, sc["shift"])
     origins = np.broadcast_to(eye, dirs.shape)
@@ -137,6 +139,12 @@ def render(eye, target, width, height, fov_deg, scene="blocks"):
     t = np.where(floor, t_floor, t)
     normal[floor] = (0.0, 1.0, 0.0)
     grey[floor] = FLOOR_GREY
+    return dirs, t, normal, grey
+
+
+def render(eye, target, width, height, fov_deg, scene="blocks"):
+    sc = SCENES[scene]
+    dirs, t, normal, grey = cast(eye, target, width, height, fov_deg, scene)
     hit = np.isfinite(t)
 
     # sky: soft vertical gradient
@@ -153,6 +161,19 @@ def render(eye, target, width, height, fov_deg, scene="blocks"):
 
     img = np.clip(shade * 255.0 + 0.5, 0, 255).astype(np.uint8).reshape(height, width)
     return np.repeat(img[..., None], 3, axis=-1)
+
+
+def render_depth(eye, target, width, height, fov_deg, scene="blocks", percentile=0.005):
+    """Depth map for the look still, as web/src/depth.js makes it: grey = nearZ / z of the view-space
+    depth, so the nearest surface is white and the sky black; nearZ is a low percentile of the hits."""
+    dirs, t, _, _ = cast(eye, target, width, height, fov_deg, scene)
+    forward = (target - eye) / np.linalg.norm(target - eye)
+    z = np.where(np.isfinite(t), t * (dirs @ forward), 0.0)
+    valid = np.sort(z[z > 0])
+    near = valid[min(len(valid) - 1, int(len(valid) * percentile))] if len(valid) else 1.0
+    with np.errstate(divide="ignore"):
+        grey = np.where(z > 0, np.round(255 * np.minimum(1, near / z)), 0).astype(np.uint8)
+    return np.repeat(grey.reshape(height, width)[..., None], 3, axis=-1)
 
 
 def write_png(path, rgb):
@@ -212,6 +233,7 @@ def main(argv=None):
         frame = render(eye, target, args.width, args.height, fov, args.scene)
         if i == 0:
             write_png(out.with_name(out.stem + "_first.png"), frame)
+            write_png(out.with_name(out.stem + "_depth.png"), render_depth(eye, target, args.width, args.height, fov, args.scene))
         proc.stdin.write(frame.tobytes())
         print(f"\rframe {i + 1}/{frames}", end="", flush=True)
     proc.stdin.close()
