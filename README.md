@@ -83,6 +83,9 @@ Needs Node 20+ and Chrome or Edge (the playblast is encoded in the browser with 
 cd web && npm install && npm run dev
 ```
 
+In Windows PowerShell 5.1, which has no `&&`, use `;` instead: `cd web; npm install; npm run dev`.
+`npm run build` builds the static page (what GitHub Pages serves) into `web/dist/`.
+
 Open http://localhost:5173, add boxes, people and walls, then turn on **Look through shot camera**,
 frame the shot and press **K** to key it on the timeline. Or frame frame 0 and pick a one-click move under
 **Apply move**: dolly in/out, truck, crane, orbit or locked off. A scene can hold several **shots** (cameras
@@ -105,11 +108,25 @@ ComfyUI core nodes by `server/workflow.py`; a 1920×1088 playblast also gets sta
 The SDK talks to Comfy Cloud by default, or to any ComfyUI behind
 [comfy-api-proxy](https://github.com/Comfy-Org/comfy-api-proxy) via `COMFY_BASE_URL`.
 
+Needs Python 3.10+ (the Python that ships with macOS is 3.9: get a newer one from python.org or Homebrew).
+Install into a virtual environment: Ubuntu 23.04+ and Homebrew's Python refuse a plain `pip install`.
+Commands below are run from the repo root, with the environment active.
+
 ```bash
+python3 -m venv .venv && . .venv/bin/activate
 pip install -r server/requirements.txt
 COMFY_API_KEY=comfyui-... python -m server.app                          # Comfy Cloud (paid plan)
 python -m server.app --comfy-url http://127.0.0.1:8189                  # your own ComfyUI + comfy-api-proxy
 COMFY_API_KEY=<proxy token> python -m server.app --comfy-url https://<pod>-8189.proxy.runpod.net   # RunPod
+```
+
+On Windows, in PowerShell (use `py` if `python` isn't found):
+
+```powershell
+python -m venv .venv; .venv\Scripts\Activate.ps1     # "running scripts is disabled"? Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+pip install -r server/requirements.txt
+$env:COMFY_API_KEY = "comfyui-..."; python -m server.app                 # env vars are set with $env:
+python -m server.app --comfy-url http://127.0.0.1:8189
 ```
 
 Before spending GPU time, `python -m server.doctor` checks the Python side and the Comfy target, and with
@@ -154,6 +171,30 @@ comfy-api-proxy --comfyui http://127.0.0.1:8188 --port 8189 &
 python -m server.app --comfy-url http://127.0.0.1:8189
 ```
 
+Windows PowerShell 5.1 has no trailing `&`, so start the first two with `Start-Process` (this works in
+PowerShell 7 too):
+
+```powershell
+Start-Process -NoNewWindow python -ArgumentList "-m server.mock_comfyui --port 8188"
+Start-Process -NoNewWindow comfy-api-proxy -ArgumentList "--comfyui http://127.0.0.1:8188 --port 8189"
+python -m server.app --comfy-url http://127.0.0.1:8189
+```
+
+Then, from a second terminal in the repo root, send the plaza example through it (each job takes a few
+seconds against the mock). In PowerShell type `curl.exe`: plain `curl` is an alias for `Invoke-WebRequest`.
+
+```bash
+curl -F depth=@examples/layout_plaza_dolly_in_depth.png -F "prompt=a sunlit plaza" -F width=960 -F height=576 http://127.0.0.1:8190/api/look
+curl http://127.0.0.1:8190/api/look/<id>               # repeat until "status": "succeeded"
+curl -o look.png http://127.0.0.1:8190/api/look/<id>/image
+curl -F layout=@examples/layout_plaza_dolly_in.mp4 -F look=@look.png -F "prompt=a sunlit plaza" -F width=960 -F height=576 -F frames=65 http://127.0.0.1:8190/api/render
+curl http://127.0.0.1:8190/api/render/<id>             # "succeeded", then:
+curl -o out.mp4 http://127.0.0.1:8190/api/render/<id>/video
+```
+
+Against the mock, `out.mp4` is the layout clip itself. A weekly check runs exactly these steps on clean
+Linux, macOS and Windows machines ([install.yml](.github/workflows/install.yml)).
+
 Tests: `python -m unittest discover -s server/tests -t .` (the end-to-end ones start the mock and the proxy).
 
 ## Try the pipeline now
@@ -161,6 +202,7 @@ Tests: `python -m unittest discover -s server/tests -t .` (the end-to-end ones s
 Make a test layout clip locally (needs Python with numpy, and ffmpeg or `pip install imageio-ffmpeg`):
 
 ```bash
+pip install -r requirements.txt
 python scripts/make_test_layout.py --move dolly_in -o examples/layout_dolly_in.mp4
 ```
 

@@ -1,0 +1,156 @@
+name: Install check
+
+# Follows the README's run-locally steps, word for word, on clean Linux, macOS and Windows machines,
+# without a GPU: install, build the page, run the "No GPU?" chain (mock ComfyUI -> comfy-api-proxy ->
+# render server) and send the plaza example through it as a look still and a render.
+# If a step fails on one OS, fix the README, not this file. Windows runs Windows PowerShell 5.1
+# (what a judge's Windows machine has), using the README's PowerShell lines.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  pull_request:
+    paths:
+      - README.md
+      - .github/workflows/install.yml
+      - requirements.txt
+      - server/requirements.txt
+      - web/package.json
+      - web/package-lock.json
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      # The minimums the README asks for: Python 3.10+, Node 20+. No caches: a clean machine has none.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Clone
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # --- Linux and macOS: the README's bash lines ---
+      - name: Install (Render)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          python3 -m venv .venv && . .venv/bin/activate
+          pip install -r server/requirements.txt
+
+      - name: Build the page (Blocking tool)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: cd web && npm install && npm run build
+
+      - name: Test layout clip (Try the pipeline now)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          . .venv/bin/activate
+          pip install -r requirements.txt
+          python scripts/make_test_layout.py --move dolly_in -o examples/layout_dolly_in.mp4
+
+      - name: No-GPU chain, then a look and a render (Render)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          . .venv/bin/activate
+          trap 'kill $(jobs -p) 2>/dev/null' EXIT
+          python -m server.mock_comfyui --port 8188 &
+          comfy-api-proxy --comfyui http://127.0.0.1:8188 --port 8189 &
+          python -m server.app --comfy-url http://127.0.0.1:8189 &   # the README runs this one in the foreground
+
+          up() { for _ in $(seq 60); do curl -sf "$1" > /dev/null && return 0; sleep 1; done; echo "::error::$1 never answered"; return 1; }
+          up http://127.0.0.1:8189/api/v2/health
+          up http://127.0.0.1:8190/api/health
+          field() { python -c "import json, sys; print(json.load(sys.stdin)['$1'])"; }
+          finish() {  # poll a job until it ends; succeed only on "succeeded"
+            for _ in $(seq 90); do
+              state=$(curl -s "$1"); status=$(echo "$state" | field status)
+              case $status in succeeded) return 0;; failed|cancelled) echo "::error::$1: $state"; return 1;; esac
+              sleep 2
+            done
+            echo "::error::$1 still $status"; return 1
+          }
+
+          id=$(curl -F depth=@examples/layout_plaza_dolly_in_depth.png -F "prompt=a sunlit plaza" -F width=960 -F height=576 http://127.0.0.1:8190/api/look | field id)
+          finish http://127.0.0.1:8190/api/look/$id
+          curl -o look.png http://127.0.0.1:8190/api/look/$id/image
+          id=$(curl -F layout=@examples/layout_plaza_dolly_in.mp4 -F look=@look.png -F "prompt=a sunlit plaza" -F width=960 -F height=576 -F frames=65 http://127.0.0.1:8190/api/render | field id)
+          finish http://127.0.0.1:8190/api/render/$id
+          curl -o out.mp4 http://127.0.0.1:8190/api/render/$id/video
+
+          python -c "import sys; d = open('out.mp4', 'rb').read(); sys.exit(d[4:8] != b'ftyp')" || { echo "::error::out.mp4 is not an MP4"; exit 1; }
+          ls -l look.png out.mp4
+
+      # --- Windows: the README's PowerShell lines ---
+      - name: Install (Render)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          python -m venv .venv; .venv\Scripts\Activate.ps1
+          pip install -r server/requirements.txt
+
+      - name: Build the page (Blocking tool)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: cd web; npm install; npm run build
+
+      - name: Test layout clip (Try the pipeline now)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          .venv\Scripts\Activate.ps1
+          pip install -r requirements.txt
+          python scripts/make_test_layout.py --move dolly_in -o examples/layout_dolly_in.mp4
+
+      - name: No-GPU chain, then a look and a render (Render)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          .venv\Scripts\Activate.ps1
+          Start-Process -NoNewWindow python -ArgumentList "-m server.mock_comfyui --port 8188"
+          Start-Process -NoNewWindow comfy-api-proxy -ArgumentList "--comfyui http://127.0.0.1:8188 --port 8189"
+          Start-Process -NoNewWindow python -ArgumentList "-m server.app --comfy-url http://127.0.0.1:8189"   # the README runs this one in the foreground
+          try {
+            function Up($url) {
+              for ($i = 0; $i -lt 60; $i++) { curl.exe -sf $url > $null; if ($LASTEXITCODE -eq 0) { return }; Start-Sleep 1 }
+              throw "$url never answered"
+            }
+            Up http://127.0.0.1:8189/api/v2/health
+            Up http://127.0.0.1:8190/api/health
+            function Finish($url) {  # poll a job until it ends; succeed only on "succeeded"
+              for ($i = 0; $i -lt 90; $i++) {
+                $state = curl.exe -s $url; $status = ($state | ConvertFrom-Json).status
+                if ($status -eq "succeeded") { return }
+                if ($status -in "failed", "cancelled") { throw "${url}: $state" }
+                Start-Sleep 2
+              }
+              throw "$url still $status"
+            }
+
+            $id = (curl.exe -F depth=@examples/layout_plaza_dolly_in_depth.png -F "prompt=a sunlit plaza" -F width=960 -F height=576 http://127.0.0.1:8190/api/look | ConvertFrom-Json).id
+            Finish http://127.0.0.1:8190/api/look/$id
+            curl.exe -o look.png http://127.0.0.1:8190/api/look/$id/image
+            $id = (curl.exe -F layout=@examples/layout_plaza_dolly_in.mp4 -F look=@look.png -F "prompt=a sunlit plaza" -F width=960 -F height=576 -F frames=65 http://127.0.0.1:8190/api/render | ConvertFrom-Json).id
+            Finish http://127.0.0.1:8190/api/render/$id
+            curl.exe -o out.mp4 http://127.0.0.1:8190/api/render/$id/video
+
+            $head = [System.IO.File]::ReadAllBytes("$PWD\out.mp4")[4..7]
+            if ([System.Text.Encoding]::ASCII.GetString($head) -ne "ftyp") { throw "out.mp4 is not an MP4" }
+            Get-Item look.png, out.mp4
+          } finally {
+            Get-Process python, comfy-api-proxy -ErrorAction SilentlyContinue | Stop-Process -Force
+          }
