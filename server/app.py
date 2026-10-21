@@ -96,6 +96,7 @@ class RenderService:
     def public(self, rid):
         job = self.jobs[rid]
         out = {k: v for k, v in job.items() if not k.startswith("_")}
+        out["elapsed"] = round(time.time() - job["created"], 1)  # server clock, so the page needn't trust its own
         if job["status"] == "succeeded":
             _, what = self.RESULTS[job["kind"]]
             out[f"{what}_url"] = f"/api/{job['kind']}/{rid}/{what}"

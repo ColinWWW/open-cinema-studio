@@ -7,6 +7,7 @@ const PORT = 4173;
 
 export default defineConfig({
   testDir: 'e2e',
+  testIgnore: 'render_flow.spec.js', // needs the render server chain: playwright.render.config.js
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['github']] : 'list',
