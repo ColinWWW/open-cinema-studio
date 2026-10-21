@@ -20,8 +20,13 @@ class ConcatListTest(unittest.TestCase):
         text = concat_list(["a.mp4", "/tmp/it's.mp4"])
         lines = text.splitlines()
         self.assertEqual(lines[0], "ffconcat version 1.0")
-        self.assertTrue(lines[1].startswith("file '/") and lines[1].endswith("/a.mp4'"))
-        self.assertEqual(lines[2], "file '/tmp/it'\\''s.mp4'")
+        # absolute on every OS (C:\... on Windows), and a ' in a name closed, escaped and reopened
+        a = Path("a.mp4").resolve()
+        self.assertTrue(a.is_absolute())
+        self.assertEqual(lines[1], f"file '{a}'")
+        quoted = str(Path("/tmp/it's.mp4").resolve()).replace("'", "'\\''")
+        self.assertEqual(lines[2], f"file '{quoted}'")
+        self.assertIn("it'\\''s.mp4", lines[2])
 
 
 @unittest.skipUnless(LAYOUT.is_file() and RENDER.is_file(), "example clips missing")

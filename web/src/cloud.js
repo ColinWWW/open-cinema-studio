@@ -101,6 +101,11 @@ export function normalizeBase(input) {
   if (u.protocol !== 'https:' && !(u.protocol === 'http:' && LOCAL.has(u.hostname))) {
     throw new Error('Use an https:// URL (http only for localhost): your key is sent there.');
   }
+  // A dotless name is almost always the key pasted into the wrong field: refuse it before the key
+  // goes out as a DNS lookup or ends up on screen (docs/SECURITY.md, finding 2).
+  if (!LOCAL.has(u.hostname) && !u.hostname.includes('.')) {
+    throw new Error('That isn’t a web address (did the key go in the “via” field?). Use the relay’s full URL, or leave it blank.');
+  }
   if (u.search || u.hash || u.username || u.password) throw new Error('Leave out ?query, #fragment and user:password@');
   return `${u.origin}${u.pathname}`.replace(/\/+$/, '').replace(/\/api\/v2$/, '');
 }
@@ -133,15 +138,29 @@ const HINTS = {
   403: 'this key may not use the API (Comfy Cloud API access needs a paid plan)',
 };
 
-async function apiError(res) {
+const MAX_MESSAGE = 300;
+
+/** An upstream or browser message made safe for the status line: the key cut out, one short line of text. */
+export function redact(message, key) {
+  let s = String(message ?? '');
+  if (key) s = s.split(key).join('[your key]');
+  s = s.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
+  return s.length > MAX_MESSAGE ? `${s.slice(0, MAX_MESSAGE - 1)}…` : s;
+}
+
+async function apiError(res, key) {
   const body = await res.json().catch(() => ({}));
-  const e = body.error;
-  const msg = (e && typeof e === 'object' ? e.message : e) || HINTS[res.status] || `${res.status} ${res.statusText}`;
+  const e = body?.error;
+  const raw = (e && typeof e === 'object' ? e.message : e) || HINTS[res.status] || `${res.status} ${res.statusText}`;
+  const msg = redact(raw, key);
   const err = new Error(HINTS[res.status] && !msg.includes(HINTS[res.status]) ? `${msg} (${HINTS[res.status]})` : msg);
   err.status = res.status;
   err.code = e?.code;
   return err;
 }
+
+// Comfy keys are one token of printable ASCII; anything else can't go in a header anyway.
+const KEY_SHAPE = /^[\x21-\x7e]{1,512}$/;
 
 const newKey = () => globalThis.crypto?.randomUUID?.() ?? `ocs-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -151,15 +170,21 @@ const newKey = () => globalThis.crypto?.randomUUID?.() ?? `ocs-${Date.now()}-${M
  */
 export function comfyClient({ base = COMFY_CLOUD, key, fetchFn = fetch }) {
   if (!key) throw new Error('Add your Comfy API key first.');
+  // A pasted key with a stray space or newline makes fetch throw an error that quotes the whole header.
+  if (!KEY_SHAPE.test(key)) throw new Error('That API key has spaces or unusual characters: copy it again from platform.comfy.org.');
   const root = `${base}/api/v2`;
   async function call(path, { method = 'GET', headers = {}, body, ok = [200] } = {}) {
     let res;
     try {
-      res = await fetchFn(`${root}${path}`, { method, body, headers: { Authorization: `Bearer ${key}`, ...headers } });
+      // No cookies and no Referer to `base`: the page URL can carry a shared scene (docs/SECURITY.md).
+      res = await fetchFn(`${root}${path}`, {
+        method, body, credentials: 'omit', referrerPolicy: 'no-referrer',
+        headers: { Authorization: `Bearer ${key}`, ...headers },
+      });
     } catch (err) {
-      throw new Error(`could not reach ${base} (${err.message}). If this is Comfy Cloud, the browser was probably blocked (CORS): put your worker/ relay's URL here.`);
+      throw new Error(`could not reach ${base} (${redact(err.message, key)}). If this is Comfy Cloud, the browser was probably blocked (CORS): put your worker/ relay's URL here.`);
     }
-    if (!ok.includes(res.status)) throw await apiError(res);
+    if (!ok.includes(res.status)) throw await apiError(res, key);
     return res;
   }
   return {

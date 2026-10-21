@@ -6,8 +6,8 @@ export const DEMO_FILES = {
   layout: 'layout_plaza_dolly_in.mp4', // playblast (grey layout clip)
   frame0: 'layout_plaza_dolly_in_first.png',
   depth: 'layout_plaza_dolly_in_depth.png',
-  look: 'look_gen_plaza_a40.png', // look still generated from the depth (Z-Image-Turbo + depth ControlNet)
-  render: 'stage1_genlook_plaza_a40.mp4', // LTX-2.5 + Layout-to-Render, stage 1
+  look: 'look_day_plaza.png', // look still generated from the depth (Z-Image-Turbo + depth ControlNet), sky kept
+  render: 'stage1_day_plaza_a40.mp4', // LTX-2.5 + Layout-to-Render, stage 1
 };
 
 /** {layout, frame0, depth, look, render} -> URLs under the app's base path ('/' or '/open-cinema-studio/'). */

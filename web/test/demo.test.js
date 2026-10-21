@@ -8,8 +8,8 @@ test('demo files exist in examples/', () => {
 });
 
 test('demoUrls follow the base path', () => {
-  assert.equal(demoUrls('/').render, '/demo/stage1_genlook_plaza_a40.mp4');
-  assert.equal(demoUrls('/open-cinema-studio/').look, '/open-cinema-studio/demo/look_gen_plaza_a40.png');
+  assert.equal(demoUrls('/').render, '/demo/stage1_day_plaza_a40.mp4');
+  assert.equal(demoUrls('/open-cinema-studio/').look, '/open-cinema-studio/demo/look_day_plaza.png');
   assert.equal(demoUrls('/open-cinema-studio').layout, '/open-cinema-studio/demo/layout_plaza_dolly_in.mp4');
   assert.deepEqual(Object.keys(demoUrls()).sort(), ['depth', 'frame0', 'layout', 'look', 'render']);
 });
