@@ -94,6 +94,21 @@ def test_three_looks_match_the_app_prompts():
         assert prompt in prompts
 
 
+def test_four_moves_commands_and_grid():
+    moves = _load("four_moves")
+    cmds = moves.render_commands()
+    assert [c[1] if c[1].endswith(".py") else c[2] for c in cmds] == ["scripts/make_test_layout.py", "server.look", "server.render"] * 4
+    for move, (layout, depth, look, out) in ((m, moves.paths(m)) for m in moves.CLIPS):
+        draw, still, render = cmds[3 * list(moves.CLIPS).index(move):][:3]
+        assert draw[draw.index("--move") + 1] == move and draw[-1] == str(layout)
+        assert still[3] == str(depth) and still[still.index("-o") + 1] == str(look)
+        assert render[3:5] == [str(layout), str(look)] and render[render.index("-o") + 1] == str(out)
+        assert still[-1] == render[-1] == str(moves.CLIPS[move][2])  # same seed for the still and the clip
+    f = moves.grid_filter(480)
+    assert "xstack=inputs=4" in f and f.count("overlay=") == 4 and "palettegen" not in f
+    assert "palettegen" in moves.grid_filter(320, fps=12, gif=True)
+
+
 def test_three_looks_commands_and_grid():
     cmds = looks.render_commands(seed=7)
     assert [c[2] for c in cmds] == ["server.look", "server.render"] * 3
