@@ -63,18 +63,23 @@ async function main() {
   fs.mkdirSync(OUT, { recursive: true });
   for (const f of fs.readdirSync(OUT)) if (f.endsWith('.webm')) fs.rmSync(path.join(OUT, f));
 
+  // On Windows npm/npx are .cmd files, which spawn can only run through a shell, and the preview server is
+  // stopped by killing its process tree (taskkill /T) instead of a POSIX process group.
+  const win = process.platform === 'win32';
   if (!flag('--no-build')) {
-    const b = spawnSync('npm', ['run', 'build'], { cwd: WEB, stdio: 'inherit', env: { ...process.env, BASE_PATH: '/' } });
+    const b = spawnSync('npm', ['run', 'build'], { cwd: WEB, stdio: 'inherit', shell: win, env: { ...process.env, BASE_PATH: '/' } });
     if (b.status !== 0) throw new Error('web build failed (run npm ci in web/ first)');
   }
   const server = spawn('npx', ['vite', 'preview', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'], {
     cwd: WEB,
     stdio: 'ignore',
-    detached: true,
+    shell: win,
+    detached: !win,
   });
   const stopServer = () => {
     try {
-      process.kill(-server.pid);
+      if (win) spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F'], { stdio: 'ignore' });
+      else process.kill(-server.pid);
     } catch {
       // already gone
     }

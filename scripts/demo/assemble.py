@@ -153,7 +153,9 @@ def editor(raw: Path, beat: dict) -> list[Media]:
 def parts(raw: Path) -> list[Part]:
     """The shot list of DEMO_SCRIPT.md: keep the two in step."""
     beats = {b["name"]: b for b in json.loads((raw / "beats.json").read_text())["beats"]}
-    layout, render = EX / "layout_plaza_dolly_in.mp4", EX / "stage1_genlook_plaza_a40.mp4"
+    layout, render = EX / "layout_plaza_dolly_in.mp4", EX / "stage1_day_plaza_a40.mp4"  # the day look, sky kept
+    # the scene record.mjs blocks at 0:08 (plaza + a box and a person, Orbit right), rendered on the A40
+    scene_layout, scene_render = EX / "layout_demo_scene.mp4", EX / "stage1_demo_scene_a40.mp4"
     frame0, depth = EX / "layout_plaza_dolly_in_first.png", EX / "layout_plaza_dolly_in_depth.png"
     sbs = ("Grey layout, blocked in the browser", "LTX-2.5 render (A40)")
     out = [
@@ -181,9 +183,10 @@ def parts(raw: Path) -> list[Part]:
                                  (EX / "look_night_plaza.png", "Rainy night"), (EX / "look_snow_plaza.png", "Snowy dusk")])),
         # 1:00 Render
         Part(8, "LTX-2.5 with the Layout-to-Render IC-LoRA follows the layout's camera and blocking and takes "
-                "the look from that frame. About 3 minutes on an A40.", two_up(layout, render, sbs)),
+                "the look from that frame. About 3 minutes on an A40.",
+             two_up(scene_layout, scene_render, ("The shot blocked above", "Its LTX-2.5 render (A40)"))),
         Part(7, "Stage 2: an x2 latent upscale and 3 refine steps to 1920x1088, 97 frames in about 6 minutes.",
-             [Media(EX / "two_stage_plaza_1920_a40.mp4", (W - 1568) // 2, (BAND_Y - 888) // 2, 1568, 888,
+             [Media(EX / "two_stage_day_plaza_1920_a40.mp4", (W - 1568) // 2, (BAND_Y - 888) // 2, 1568, 888,
                     "Stage 2, 1920x1088 (A40)")]),
         # 1:15 A scene, not a clip
         Part(15, "Add shots, order the cut, render the whole scene: one blocking, several cameras, one sequence.",

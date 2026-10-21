@@ -19,7 +19,8 @@ Needs Node 22, Python 3.10+ and `ffmpeg` on the PATH. `demo/` is in `.gitignore`
 | ![Render panel in demo mode](frames/render_panel.jpg) | ![Look stills](frames/look_stills.jpg) |
 | ![Sequence](frames/sequence.jpg) | ![End card](frames/end_card.jpg) |
 
-<sub>Frames from a run with Playwright's Chromium (no GPU); `frames/` holds these only for this page.</sub>
+<sub>Frames from a run on Windows in Edge (`CHROMIUM_PATH=".../msedge.exe"`, which has the H.264 encoder, so the
+real playblast beat is in) with the Oct 21 A40 renders; `frames/` holds these only for this page.</sub>
 
 ## What each script does
 
@@ -58,7 +59,9 @@ timing, edit `parts()` in `assemble.py` and the table in DEMO_SCRIPT.md together
 
 ## Notes
 
-- **Use Chrome** (`PW_CHANNEL=chrome`, the same as CI's smoke test). Playwright's bundled Chromium has
+- **Use Chrome or Edge**: `PW_CHANNEL=chrome` (the same as CI's smoke test), or point `CHROMIUM_PATH` at
+  `msedge.exe` or `chrome.exe` on Windows. Recording works on Windows too: `record.mjs` runs `npm`/`npx`
+  through a shell there and stops the preview server with `taskkill`. Playwright's bundled Chromium has
   no H.264 encoder, so *Export playblast* can't run there: `record.mjs` skips that beat and
   `assemble.py` fills the slot with the bundled plaza playblast. Chromium also can't play the Render
   panel's H.264 clips, so the demo panel's videos stay black in its recording.
