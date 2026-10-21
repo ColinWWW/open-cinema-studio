@@ -54,9 +54,12 @@ SF Build Night Oct 28 (https://luma.com/5mydmvu6): for debugging with the Comfy 
    `web/` as a static site on **GitHub Pages**. **Render** calls Comfy Cloud through the Comfy SDK with the
    **visitor's own Comfy API key** (entered in the page, kept in their browser only, never sent to us),
    so each visitor's renders bill their own account. Without a key, the page still blocks and exports
-   playblasts, and shows the example renders. **Unverified:** whether the Comfy SDK/Cloud API can be
-   called from a browser (CORS, key handling). If not, a tiny free-tier proxy (e.g. a Cloudflare Worker)
-   passes requests through without storing keys.
+   playblasts, and shows the example renders. **Outcome (Oct 21, [LIVE_RENDER.md](LIVE_RENDER.md)):**
+   neither official SDK runs in a browser, and Comfy Cloud almost certainly sends no CORS headers
+   (nothing in the docs; another entrant hit the same wall). So the page speaks the Comfy API v2 with
+   `fetch` (`web/src/cloud.js`, same workflows as the server) through `worker/`, a Cloudflare Worker
+   pass-through that stores and logs nothing. Built and tested with mocks, not deployed yet. One free
+   check with a real key settles whether Cloud needs the relay at all (LIVE_RENDER.md, "The one test to run").
 
 **Scope discipline:** ~5 primitives + 3 camera keyframes that work every time beat a full 3D editor.
 One-command setup + a clear README beats features. **No partner API nodes anywhere.**

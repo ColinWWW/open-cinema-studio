@@ -1,8 +1,10 @@
 // Render panel: send the playblast + a look still + a prompt to the render server (server/app.py,
 // which runs our core-node LTX-2.5 workflow through the Comfy SDK) and show the result next to the
 // playblast. The dev server proxies /api/render, /api/look and /api/health to it; a page served from
-// elsewhere (GitHub Pages) calls the server at the URL set in the panel (server started with --cors-origin).
+// elsewhere (GitHub Pages) calls the server at the URL set in the panel (server started with --cors-origin),
+// or renders with the visitor's own Comfy API key and no server at all (cloud.js, docs/LIVE_RENDER.md).
 
+import { cloudLook, cloudRender, comfyClient, loadCloud, normalizeBase, saveCloud } from './cloud.js';
 import { PROMPT_IDEAS, variantSeeds } from './prompts.js';
 
 const BANNED = ['clay', '3d', 'unreal']; // the model card: describe the finished shot, not the layout
@@ -51,6 +53,25 @@ export function lookForm({ depth, prompt, output, seed, strength }) {
 }
 
 const SERVER_KEY = 'ocs.renderServer';
+const TARGET_KEY = 'ocs.renderTarget';
+
+/** Where renders run: 'server' (our render server) or 'cloud' (Comfy API with the visitor's key). */
+export function loadTarget(storage = globalThis.localStorage) {
+  try {
+    return storage?.getItem(TARGET_KEY) === 'cloud' ? 'cloud' : 'server';
+  } catch {
+    return 'server';
+  }
+}
+
+export function saveTarget(target, storage = globalThis.localStorage) {
+  try {
+    if (target === 'cloud') storage.setItem(TARGET_KEY, 'cloud');
+    else storage.removeItem(TARGET_KEY);
+  } catch {
+    // blocked storage: the choice lasts for this page view
+  }
+}
 
 /** Clean up a typed server URL: '' = same origin; adds http:// if missing; drops trailing slashes. Throws if invalid. */
 export function normalizeServer(input) {
@@ -197,6 +218,35 @@ export function describeState(s) {
 
 // ---------- DOM ----------
 
+/** The target picker and the Comfy key row, built here so index.html keeps the server's markup only. */
+function buildCloudControls() {
+  const serverRow = document.querySelector('.render-server-row');
+  const target = document.createElement('select');
+  target.id = 'render-target';
+  target.title = 'Where renders run';
+  target.append(new Option('Render server', 'server'), new Option('Comfy Cloud (your key)', 'cloud'));
+  serverRow.prepend(target);
+
+  const row = document.createElement('div');
+  row.id = 'render-cloud-row';
+  row.className = 'render-row render-server-row';
+  row.innerHTML = `
+    <label for="render-cloud-key">Comfy API key</label>
+    <input id="render-cloud-key" type="password" autocomplete="off" spellcheck="false" placeholder="comfyui-…" />
+    <label for="render-cloud-base">via</label>
+    <input id="render-cloud-base" type="text" spellcheck="false" placeholder="your relay, e.g. https://ocs-comfy-relay.you.workers.dev (blank = cloud.comfy.org)" />
+    <button id="render-cloud-save">Save &amp; check</button>
+    <button id="render-cloud-forget" title="Remove the key from this browser">Forget key</button>`;
+  const note = document.createElement('p');
+  note.id = 'render-cloud-note';
+  note.className = 'hint';
+  note.innerHTML = 'Your key is stored only in this browser (localStorage) and sent only to the URL above, never to us. '
+    + 'Renders run the same workflows as the render server and bill your Comfy account. '
+    + '<a href="https://github.com/ColinWWW/open-cinema-studio/blob/main/docs/LIVE_RENDER.md" target="_blank" rel="noopener">How to set it up</a>';
+  serverRow.after(row, note);
+  return { serverRow, target, row, note };
+}
+
 /**
  * Wire the render panel. `exportPlayblast()` returns {mp4, firstFrame, depth} for the current scene;
  * the panel re-exports only when the scene changed since the last export. The look still comes from
@@ -207,6 +257,9 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
   const $ = (id) => document.getElementById(id);
   const panel = $('render-panel');
   let server = loadServer();
+  let target = loadTarget();
+  let cloud = loadCloud(); // {key, base}
+  const ui = buildCloudControls();
   let demoMode = false;
   let check = 0; // ignores answers from older health checks
   let look = null; // {blob, name, width, height}
@@ -229,11 +282,14 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     $('render-generate').disabled = busy || demoMode || noPrompt;
     $('render-variants-go').disabled = busy || demoMode || noPrompt;
     const shots = getScene().shots.length;
-    $('render-all').disabled = busy || demoMode || noPrompt || shots < 2;
+    $('render-all').disabled = busy || demoMode || noPrompt || shots < 2 || target === 'cloud';
     $('render-all').textContent = shots < 2 ? 'Render all shots' : `Render all ${shots} shots`;
-    $('render-all').title = shots < 2 ? 'Add shots (Shots > + Shot) to render a sequence' : $('render-all').dataset.title;
+    $('render-all').title = target === 'cloud' ? 'Needs the render server (it cuts the shots together)'
+      : shots < 2 ? 'Add shots (Shots > + Shot) to render a sequence' : $('render-all').dataset.title;
     if (demoMode) {
-      $('render-hints').textContent = 'Connect a render server to generate look stills and render your own shot.';
+      $('render-hints').textContent = target === 'cloud'
+        ? 'Add your Comfy API key to generate look stills and render your own shot.'
+        : 'Connect a render server (or pick Comfy Cloud with your own key) to generate look stills and render your own shot.';
       return;
     }
     const hints = [...promptWarnings($('render-prompt').value)];
@@ -328,7 +384,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     const status = $('render-status');
     try {
       await work(status, (s) => {
-        if (signal.aborted) return; // keep "Cancelling…" up until runJob has cancelled the job
+        if (signal.aborted) return; // keep "Cancelling…" up until the job has been cancelled
         status.textContent = `${s.label || label}: ${describeState(s)}`;
         $('render-progress').value = s.status === 'succeeded' ? 1 : s.progress || 0;
       }, signal);
@@ -347,6 +403,63 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     abort.abort();
     $('render-status').textContent = 'Cancelling…';
   });
+
+  /** Look still from frame 0's depth on the chosen target: {blob, id, seconds}. `signal` cancels it (see runJob). */
+  async function makeLook(params, onUpdate, signal) {
+    if (target === 'cloud') {
+      const { blob, state } = await cloudLook(comfyClient(cloud), params, { onUpdate, signal });
+      return { blob, id: state.id.slice(0, 8), seconds: state.seconds };
+    }
+    const final = await runJob('look', lookForm(params), { server, signal, onUpdate });
+    return { blob: await fetchBlob(server, final.image_url), id: final.id, seconds: final.seconds };
+  }
+
+  /** Stage-1 render on the chosen target: {blob, id, seconds}. `signal` cancels it (see runJob). */
+  async function makeRender(params, onUpdate, signal) {
+    if (target === 'cloud') {
+      const { blob, state } = await cloudRender(comfyClient(cloud), params, { onUpdate, signal });
+      return { blob, id: state.id.slice(0, 8), seconds: state.seconds };
+    }
+    const final = await runRender(renderForm(params), { server, signal, onUpdate });
+    return { blob: await fetchBlob(server, final.video_url), id: final.id, seconds: final.seconds };
+  }
+
+  /** Comfy target: a free call (one page of past jobs) proves the key and the route. */
+  async function checkCloud() {
+    const mine = ++check;
+    const el = $('render-server');
+    el.classList.remove('bad');
+    if (!cloud.key) {
+      el.textContent = 'Comfy Cloud: add your API key.';
+      el.classList.add('bad');
+      setDemo(true);
+      return;
+    }
+    el.textContent = `Checking ${cloud.base}…`;
+    try {
+      await comfyClient(cloud).check();
+      if (mine !== check) return;
+      el.textContent = `Comfy API: ${cloud.base} (key works)`;
+      setDemo(false);
+    } catch (err) {
+      if (mine !== check) return;
+      el.textContent = `Comfy API: ${err.message}`;
+      el.classList.add('bad');
+      setDemo(true);
+    }
+  }
+
+  const checkTarget = () => (target === 'cloud' ? checkCloud() : checkServer());
+
+  function setTarget(t) {
+    target = t;
+    ui.target.value = t;
+    saveTarget(t);
+    for (const el of [...ui.serverRow.children].filter((c) => c !== ui.target)) el.hidden = t === 'cloud';
+    ui.row.hidden = ui.note.hidden = t !== 'cloud';
+    if (!panel.hidden) checkTarget();
+    refreshHints();
+  }
 
   async function checkServer() {
     const mine = ++check;
@@ -379,6 +492,30 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     checkServer();
   };
 
+  const saveCloudSettings = () => {
+    try {
+      cloud = { key: $('render-cloud-key').value.trim(), base: normalizeBase($('render-cloud-base').value) };
+    } catch (err) {
+      $('render-server').textContent = err.message;
+      $('render-server').classList.add('bad');
+      return;
+    }
+    $('render-cloud-base').value = cloud.base;
+    saveCloud(cloud);
+    checkCloud();
+  };
+  $('render-cloud-key').value = cloud.key;
+  $('render-cloud-base').value = cloud.base;
+  $('render-cloud-save').addEventListener('click', saveCloudSettings);
+  $('render-cloud-key').addEventListener('change', saveCloudSettings);
+  $('render-cloud-base').addEventListener('change', saveCloudSettings);
+  $('render-cloud-forget').addEventListener('click', () => {
+    $('render-cloud-key').value = '';
+    saveCloudSettings();
+  });
+  ui.target.addEventListener('change', () => setTarget(ui.target.value));
+  setTarget(target);
+
   $('render-all').dataset.title = $('render-all').title;
   $('render-server-url').value = server;
   $('render-server-url').addEventListener('change', connect);
@@ -386,7 +523,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
 
   $('render-open').addEventListener('click', () => {
     panel.hidden = false;
-    checkServer();
+    checkTarget();
     refreshHints();
   });
   $('render-close').addEventListener('click', () => (panel.hidden = true));
@@ -408,9 +545,8 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
       const prompt = $('render-prompt').value;
       for (const [i, seed] of seeds.entries()) {
         const label = seeds.length > 1 ? `Look still ${i + 1}/${seeds.length}` : 'Look still';
-        const form = lookForm({ depth, prompt, output: scene.output, seed });
-        const final = await runJob('look', form, { server, signal, onUpdate: (s) => onUpdate({ ...s, label }) });
-        const blob = await fetchBlob(server, final.image_url);
+        const final = await makeLook({ depth, prompt, output: scene.output, seed }, (s) => onUpdate({ ...s, label }), signal);
+        const blob = final.blob;
         const still = { blob, name: `look_${final.id}.png`, width: scene.output.width, height: scene.output.height, key: blast.key, seed, prompt };
         addStill(still);
         if (i === 0) setLook(still.blob, still.name, still.width, still.height, still.key);
@@ -500,12 +636,11 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
       for (const id of ['render-download', 'render-download-layout']) $(id).hidden = true;
       const { mp4 } = await currentBlast(status);
       const scene = getScene();
-      const form = renderForm({
+      const final = await makeRender({
         mp4, look: look.blob, lookName: look.name, prompt: $('render-prompt').value,
         output: scene.output, seed: seed(),
-      });
-      const final = await runRender(form, { server, signal, onUpdate });
-      rendered = await fetchBlob(server, final.video_url);
+      }, onUpdate, signal);
+      rendered = final.blob;
       showResult(rendered, `${(scene.name || 'shot').replace(/[^\w.-]+/g, '_')}_render_${final.id}.mp4`);
       $('render-play').click();
     }),
