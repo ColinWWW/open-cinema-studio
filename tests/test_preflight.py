@@ -119,6 +119,16 @@ def test_placeholders_fail_without_before_rename(repo):
         "docs/submission/WRITEUP.md:1: <NAME>", "docs/submission/WRITEUP.md:2: TODO (Colin)"]
 
 
+def test_placeholders_named_in_quotes_dont_count(repo):
+    # lines that *name* a placeholder stay after the rename, so they mustn't fail on submission night
+    write(repo, "docs/submission/NAMES.md", 'The project is still "Open Cinema Studio" / "Name TBD".\n'
+          '- [ ] README: drop "(goes live on submission night)"\n'
+          "Curly quotes too: “Name TBD”.\n"
+          'Name TBD, and here it is unquoted before a quoted "Name TBD".\n')
+    hits = [d for d in details(preflight.check_placeholders(repo, Opts)) if d.startswith("docs/submission/NAMES.md")]
+    assert hits == ["docs/submission/NAMES.md:4: Name TBD"]
+
+
 def test_broken_links_and_images(repo):
     assert statuses(preflight.check_links(repo, Opts)) == [preflight.OK]  # code spans and blocks are skipped
     (repo / "docs/media/hero.gif").unlink()

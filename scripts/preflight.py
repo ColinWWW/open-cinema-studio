@@ -116,6 +116,20 @@ def check_links(root, _opts):
     return [(FAIL, label, broken) if broken else (OK, label, [])]
 
 
+def occurrences(line, s):
+    i = line.find(s)
+    while i >= 0:
+        yield i
+        i = line.find(s, i + 1)
+
+
+def quoted(line, i):
+    """Is position i inside "...", “...” or `...` on this line? Then the line names the placeholder (e.g.
+    'README says "Name TBD"' in the checklist) rather than being one, and it stays after the rename."""
+    before = line[:i]
+    return before.count('"') % 2 == 1 or before.count("`") % 2 == 1 or before.count("“") > before.count("”")
+
+
 def check_placeholders(root, opts):
     files = [root / "README.md"]
     sub = root / "docs" / "submission"
@@ -131,7 +145,7 @@ def check_placeholders(root, opts):
             if re.match(r"^\s*[-*] \[[xX]\]", line):
                 continue  # a ticked checklist item that names the placeholder it removed
             for p in PLACEHOLDERS:
-                if p in line:
+                if any(not quoted(line, i) for i in occurrences(line, p)):
                     hits.append(f"{rel(root, f)}:{n}: {p}")
     label = "No placeholders left in README.md and docs/submission/"
     if not hits:
