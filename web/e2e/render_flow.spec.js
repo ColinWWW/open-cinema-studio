@@ -162,8 +162,8 @@ test('renders all shots and cuts them into a sequence that downloads', async ({ 
 test('Cancel mid-run stops Render all and leaves no job running', async ({ request }) => {
   const first = jobs.length;
   await page.locator('#render-all').click();
-  // Cancel just after shot 2's look still is submitted: it has MOCK_DELAY seconds to go, and the panel acts
-  // on Cancel at its next poll (within a second)
+  // Cancel just after shot 2's look still is submitted: it has MOCK_DELAY seconds to go, and the panel sends
+  // the cancel at once, without waiting for its next poll
   await expect.poll(() => jobs.length, { timeout: 120_000 }).toBe(first + 3);
   await expect(status()).toHaveText(/^Shot 2\/3 look still: /);
   await page.locator('#render-cancel').click();

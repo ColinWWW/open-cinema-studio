@@ -4,7 +4,7 @@
 // elsewhere (GitHub Pages) calls the server at the URL set in the panel (server started with --cors-origin),
 // or renders with the visitor's own Comfy API key and no server at all (cloud.js, docs/LIVE_RENDER.md).
 
-import { cloudLook, cloudRender, comfyClient, loadCloud, normalizeBase, saveCloud } from './cloud.js';
+import { abortableSleep, cloudLook, cloudRender, comfyClient, loadCloud, normalizeBase, saveCloud } from './cloud.js';
 import { PROMPT_IDEAS, variantSeeds } from './prompts.js';
 
 const BANNED = ['clay', '3d', 'unreal']; // the model card: describe the finished shot, not the layout
@@ -115,7 +115,7 @@ async function json(res) {
 }
 
 /** GET a job's state, retrying a dropped connection or a 5xx (proxy hiccup) a few times; the job keeps running meanwhile. */
-async function pollState(url, { fetchFn, wait, pollMs, retries }) {
+async function pollState(url, { fetchFn, wait, pollMs, retries, signal }) {
   for (let attempt = 0; ; attempt++) {
     let res;
     try {
@@ -124,29 +124,32 @@ async function pollState(url, { fetchFn, wait, pollMs, retries }) {
       if (attempt >= retries) throw err;
     }
     if (res && (res.status < 500 || attempt >= retries)) return json(res);
-    await wait(pollMs * 2 ** attempt);
+    await wait(pollMs * 2 ** attempt, signal);
   }
 }
 
 /**
  * Submit a job ('render' or 'look') and poll until it ends. Resolves with the final state; throws on failure.
  * `signal` (an AbortSignal) cancels: before the submit nothing is sent; after it the job is cancelled on the
- * server too, so a job submitted just after the user pressed Cancel doesn't keep the GPU busy.
+ * server too, so a job submitted just after the user pressed Cancel doesn't keep the GPU busy. The wait
+ * between polls ends the moment `signal` aborts, so the cancel goes out at once. If the server answers that
+ * the job already succeeded, that result is kept and returned. `sleep(ms, signal)` replaces that wait (tests).
  */
 export async function runJob(kind, form, { server = '', fetchFn = fetch, onUpdate, pollMs = 1000, retries = 4, sleep, signal } = {}) {
-  const wait = sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const wait = sleep ?? abortableSleep;
   const stop = async (id) => {
-    if (id) await cancelJob(kind, id, { server, fetchFn }).catch(() => {});
+    const end = await cancelJob(kind, id, { server, fetchFn }).catch(() => null);
+    if (end?.status === 'succeeded') return end; // it finished before the cancel landed (409): keep it
     throw new Error(`${kind} cancelled`);
   };
-  if (signal?.aborted) await stop(null);
+  if (signal?.aborted) throw new Error(`${kind} cancelled`);
   let state = await json(await fetchFn(apiUrl(server, `/api/${kind}`), { method: 'POST', body: form }));
   onUpdate?.(state);
   while (state.status === 'queued' || state.status === 'running') {
-    if (signal?.aborted) await stop(state.id);
-    await wait(pollMs);
-    if (signal?.aborted) await stop(state.id);
-    state = await pollState(apiUrl(server, `/api/${kind}/${state.id}`), { fetchFn, wait, pollMs, retries });
+    await wait(pollMs, signal);
+    state = signal?.aborted
+      ? await stop(state.id)
+      : await pollState(apiUrl(server, `/api/${kind}/${state.id}`), { fetchFn, wait, pollMs, retries, signal });
     onUpdate?.(state);
   }
   if (state.status !== 'succeeded') throw new Error(state.error || `${kind} ${state.status}`);
@@ -421,7 +424,8 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     const status = $('render-status');
     try {
       await work(status, (s) => {
-        if (signal.aborted) return; // keep "Cancelling…" up until the job has been cancelled
+        // keep "Cancelling…" up until the job has been cancelled, unless it finished first and is kept
+        if (signal.aborted && s.status !== 'succeeded') return;
         status.textContent = `${s.label || label}: ${describeState(s)}`;
         $('render-progress').value = s.status === 'succeeded' ? 1 : s.progress || 0;
       }, signal);

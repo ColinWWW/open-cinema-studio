@@ -121,6 +121,41 @@ test('runJob cancels a running job between polls, even if the cancel request fai
   assert.deepEqual(calls, [['/api/render', 'POST'], ['/api/render/r7', 'GET'], ['/api/render/r7/cancel', 'POST']]);
 });
 
+// A sleep that never ends by itself, only when the signal aborts: a runJob that waits out the poll hangs here.
+const onlyOnAbort = (ms, signal) => new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+
+test('runJob sends the cancel the moment Cancel is pressed, not at the next poll', async () => {
+  const ctl = new AbortController();
+  const calls = [];
+  const fetchFn = async (url, opts) => {
+    calls.push([url, opts?.method || 'GET']);
+    if (url === '/api/render') return reply({ id: 'r3', status: 'running', progress: 0.2 }, 202);
+    return reply({ id: 'r3', status: 'cancelled' });
+  };
+  const run = runRender(new FormData(), { fetchFn, pollMs: 60_000, sleep: onlyOnAbort, signal: ctl.signal });
+  await new Promise((r) => setTimeout(r, 10)); // the job is mid-poll-wait
+  ctl.abort();
+  await assert.rejects(run, /render cancelled/);
+  assert.deepEqual(calls, [['/api/render', 'POST'], ['/api/render/r3/cancel', 'POST']]);
+});
+
+test('runJob keeps a job that succeeded before the cancel landed', async () => {
+  const ctl = new AbortController();
+  const done = { id: 'l4', status: 'succeeded', image_url: '/api/look/l4/image', seconds: 3.1 };
+  const fetchFn = async (url) => {
+    if (url === '/api/look') return reply({ id: 'l4', status: 'running' }, 202);
+    return reply({ error: 'job is already succeeded', ...done }, 409); // the server's answer to a late cancel
+  };
+  const seen = [];
+  const run = runJob('look', new FormData(), { fetchFn, sleep: onlyOnAbort, signal: ctl.signal, onUpdate: (s) => seen.push(s.status) });
+  await new Promise((r) => setTimeout(r, 10));
+  ctl.abort();
+  const final = await run;
+  assert.equal(final.status, 'succeeded');
+  assert.equal(final.image_url, '/api/look/l4/image');
+  assert.deepEqual(seen, ['running', 'succeeded']);
+});
+
 test('lookForm carries the depth map and the clip size', () => {
   const form = lookForm({ depth: new Blob(['png']), prompt: 'a plaza', output: { width: 960, height: 576, frames: 65 }, seed: 3 });
   assert.equal(form.get('depth').name, 'depth.png');

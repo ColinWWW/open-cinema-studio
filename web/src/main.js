@@ -727,7 +727,10 @@ $('prev-key').addEventListener('click', () => jumpKey(-1));
 $('next-key').addEventListener('click', () => jumpKey(1));
 
 window.addEventListener('keydown', (e) => {
-  if (e.target.closest('input, select, textarea') || exporting) return;
+  // Typing and dialogs keep their keys, and Space presses a focused button or link. Other keys still work there:
+  // a button keeps focus after a mouse click, and W/E/R or Delete shouldn't stop working because of it.
+  if (e.target.closest?.('input, select, textarea, [role=dialog], [role=alertdialog]') || exporting) return;
+  if (e.key === ' ' && e.target.closest?.('button, a[href], summary')) return;
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === 'd') {
     e.preventDefault();

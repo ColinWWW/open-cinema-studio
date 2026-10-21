@@ -131,11 +131,54 @@ test('keyboard: Tab reaches the header, side panel, timeline and Render panel wi
   expect(rest.indexOf('cam-move-apply')).toBeLessThan(rest.indexOf('play'));
 });
 
-test('keyboard: on a first visit the demo replay is the first thing Tab reaches', async ({ page }) => {
+test('keyboard: on a first visit the demo replay opens with focus on its Close button', async ({ page }) => {
   await page.goto('./');
   await expect(page.locator('#replay')).toBeVisible();
-  await page.keyboard.press('Tab');
   expect(await focused(page)).toEqual({ id: 'replay-close', ring: true });
   await page.keyboard.press('Enter');
   await expect(page.locator('#replay')).toBeHidden();
+});
+
+test('keyboard: Space presses a focused button instead of toggling play', async ({ page }) => {
+  await skipReplay(page);
+  await page.goto('./');
+  const play = page.locator('#play');
+  await expect(play).toHaveText('▶');
+
+  await tabTo(page, 'render-open');
+  await page.keyboard.press('Space');
+  await expect(page.locator('#render-panel')).toBeVisible();
+  await expect(play).toHaveText('▶');
+  await page.locator('#render-close').click();
+
+  // With nothing focused, Space is still play/pause.
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press('Space');
+  await expect(play).toHaveText('⏸');
+  await page.keyboard.press('Space');
+  await expect(play).toHaveText('▶');
+});
+
+test('keyboard: ▶ Demo moves focus into the replay and back out when it closes', async ({ page }) => {
+  await skipReplay(page);
+  await page.goto('./');
+  await expect(page.locator('#replay')).toBeHidden();
+
+  // Escape closes it
+  await tabTo(page, 'replay-open');
+  await page.keyboard.press('Space');
+  await expect(page.locator('#replay')).toBeVisible();
+  expect(await focused(page)).toEqual({ id: 'replay-close', ring: true });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#replay')).toBeHidden();
+  expect((await focused(page)).id).toBe('replay-open');
+
+  // and so does Close
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#replay')).toBeVisible();
+  expect((await focused(page)).id).toBe('replay-close');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#replay')).toBeHidden();
+  expect((await focused(page)).id).toBe('replay-open');
+  await expect(page.locator('#play')).toHaveText('▶');
 });
