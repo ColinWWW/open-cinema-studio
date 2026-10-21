@@ -31,10 +31,10 @@ of Oct 29 through the [form](https://form.typeform.com/to/V1dSQrkS). Rules and D
 
 ## Before submitting (Oct 29)
 
-- [ ] 121-frame (5 s) stage-1 render on the A40: does it fit in memory, how long, does quality hold? Decides the shot length for the examples
-- [ ] Final example renders: the 3-way comparison (`python scripts/three_looks.py` on the pod, ~11 min: three looks + renders, then the grid MP4 and `docs/media/three_looks.gif`), a 3-shot sequence (**Render all shots** in the app) and one 1920×1088 two-stage render (stage 2 is built, `workflows/two_stage_layout_api.json`, and current ComfyUI accepts it, but it has never run on a GPU: export a 1920×1088 playblast and press **Render shot**. If it runs out of memory or looks worse than stage 1, drop stage 2 from the README)
-- [ ] On the pod first: `python -m server.doctor --comfyui http://127.0.0.1:8188` (every node and model file present)
-- [ ] README: uncomment the "Same blocking, three looks" block once `docs/media/three_looks.gif` exists
+- [x] 121-frame (5 s) stage-1 render on the A40 (Oct 21): fits (about 35 GB of 45 GB of VRAM), 257 s, and quality holds to the last frame (`examples/stage1_plaza_121f_a40.mp4`)
+- [x] Final example renders (Oct 21): the three-looks comparison (`scripts/three_looks.py`, seed 2024: at 42 the night still drifted off the layout, and the snow prompt now says "tall brick building" instead of "clock tower"), a four-shot sequence from **Render all shots** and a 1920×1088 two-stage render (373 s for 97 frames, no out-of-memory, sharp at 1:1: stage 2 stays in the README)
+- [x] On the pod first: `python -m server.doctor --comfyui http://127.0.0.1:8188` (all good, Oct 21)
+- [x] README: "Same blocking, three looks" block uncommented
 - [ ] Note where `examples/look_plaza.jpg` came from in the licence audit
 - [ ] Project name decided (README says "Name TBD")
 - [ ] Form text from [WRITEUP.md](WRITEUP.md), with the name and links filled in

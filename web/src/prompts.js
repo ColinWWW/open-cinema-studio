@@ -8,7 +8,7 @@ export const PROMPT_IDEAS = [
       'A sunny stone plaza with a glass office tower, an iron lamp post, stacked wooden crates and a white market kiosk, slow push-in.',
       'Golden-hour light over a quiet Mediterranean square, warm stone walls, wooden crates beside a striped kiosk, slow dolly forward.',
       'A rainy night plaza lit by a single street lamp, wet cobblestones reflecting neon from a closed kiosk, crates stacked in the shadows, slow push-in.',
-      'A snowy winter square at dusk with a brick clock tower, a glowing lamp post and a wooden market stall dusted with snow, gentle camera push.',
+      'A snowy winter square at dusk with a tall brick building, a glowing lamp post, crates dusted with snow and a wooden market stall, gentle camera push.',
     ],
   },
   {
