@@ -3,17 +3,21 @@ self-hosted ComfyUI) that every node and model file our workflows use is there.
 
     python -m server.doctor                                  # local checks + the target from the env
     python -m server.doctor --comfyui http://127.0.0.1:8188  # also ask ComfyUI itself (/object_info)
+    python -m server.doctor --local                          # also: are this computer's GPU and RAM enough?
 
 Exits 1 if anything is missing, with what to do about it.
 """
 
 import argparse
+import ctypes
 import importlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from .workflow import WORKFLOW_FILES
@@ -23,6 +27,12 @@ SETUP = {"look_still_depth_api.json": "bash scripts/setup_look_models.sh"}
 SETUP_DEFAULT = "bash scripts/setup_pod.sh"
 INPUT_LOADERS = {"LoadImage", "LoadVideo"}  # their files are uploaded with each job
 PACKAGES = {"comfy_sdk": "comfy-sdk", "aiohttp": "aiohttp", "imageio_ffmpeg": "imageio-ffmpeg"}
+
+# Rendering on this computer. LTX-2.5's int8 transformer alone is ~22 GB and the Gemma encoder ~12 GB: with 24 GB
+# of VRAM ComfyUI swaps them in turn; below that it streams weights from RAM (--lowvram), slower; below 16 GB a
+# video render won't fit. The look still (Z-Image-Turbo ~12 GB + an 8 GB encoder) streams on smaller cards.
+VRAM_FULL_GB, VRAM_MIN_GB, VRAM_LOOK_GB = 24, 16, 8
+RAM_MIN_GB, RAM_GOOD_GB = 32, 64
 
 
 def combo_options(spec):
@@ -89,6 +99,80 @@ def target_checks(env=os.environ):
     return [(False, "Comfy target: Comfy Cloud, but COMFY_API_KEY isn't set. Set it, or use --comfy-url / COMFY_BASE_URL for your own ComfyUI")]
 
 
+def gpus():
+    """[(name, memory in GB)] of this computer's NVIDIA GPUs, from nvidia-smi ([] if there are none)."""
+    smi = shutil.which("nvidia-smi")
+    if not smi:
+        return []
+    try:
+        out = subprocess.run([smi, "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=20, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    found = []
+    for line in out.strip().splitlines():
+        name, _, mib = line.rpartition(",")
+        try:
+            found.append((name.strip(), round(float(mib) / 1024, 1)))
+        except ValueError:
+            continue
+    return found
+
+
+def ram_gb():
+    """This computer's RAM in GB, or None if it can't be read."""
+    try:
+        if sys.platform == "win32":
+            class MemoryStatus(ctypes.Structure):
+                _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong)] + [
+                    (name, ctypes.c_ulonglong) for name in
+                    ("total", "avail", "page_total", "page_avail", "virt_total", "virt_avail", "ext_avail")]
+            s = MemoryStatus(length=ctypes.sizeof(MemoryStatus))
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(s))
+            return round(s.total / 2**30, 1)
+        if sys.platform == "darwin":
+            out = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, check=True).stdout
+            return round(int(out) / 2**30, 1)
+        with open("/proc/meminfo") as f:
+            return round(int(f.readline().split()[1]) / 2**20, 1)
+    except (OSError, ValueError, AttributeError, subprocess.SubprocessError):
+        return None
+
+
+def lowvram(vram):
+    """Should ComfyUI run with --lowvram on a card with `vram` GB?"""
+    return vram < VRAM_FULL_GB
+
+
+def hardware_checks(found, ram):
+    """(ok, message) for rendering on this computer, from gpus() and ram_gb()."""
+    if not found:
+        return [(False, "No NVIDIA GPU found: rendering on this computer needs one. Use Comfy Cloud or a GPU pod instead")]
+    name, vram = max(found, key=lambda g: g[1])
+    if vram >= VRAM_FULL_GB:
+        out = [(True, f"GPU: {name}, {vram:g} GB (video renders fit)")]
+    elif vram >= VRAM_MIN_GB:
+        out = [(True, f"GPU: {name}, {vram:g} GB: video renders should run in ComfyUI's --lowvram mode, slower "
+                      f"({VRAM_FULL_GB} GB+ recommended)")]
+    else:
+        look = "look stills will run, slowly" if vram >= VRAM_LOOK_GB else "even look stills may not fit"
+        out = [(False, f"GPU: {name}, {vram:g} GB: too small for video renders (needs {VRAM_MIN_GB} GB, "
+                       f"{VRAM_FULL_GB}+ recommended); {look}. Render on a GPU pod or Comfy Cloud instead")]
+    if ram is None:
+        out.append((True, f"RAM: couldn't read it ({RAM_GOOD_GB} GB recommended)"))
+    elif ram >= RAM_GOOD_GB:
+        out.append((True, f"RAM: {ram:g} GB"))
+    elif ram >= RAM_MIN_GB - 1:  # a 32 GB machine reports a little under 32
+        out.append((True, f"RAM: {ram:g} GB: enough, but model swaps will be slow ({RAM_GOOD_GB} GB recommended)"))
+    else:
+        out.append((False, f"RAM: {ram:g} GB: the models need at least {RAM_MIN_GB} GB ({RAM_GOOD_GB} GB recommended)"))
+    return out
+
+
+def is_local(url):
+    return urllib.parse.urlsplit(url or "").hostname in ("127.0.0.1", "localhost", "::1")
+
+
 def fetch_object_info(url, timeout=20):
     with urllib.request.urlopen(f"{url.rstrip('/')}/object_info", timeout=timeout) as r:
         return json.load(r)
@@ -97,9 +181,13 @@ def fetch_object_info(url, timeout=20):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--comfyui", help="your ComfyUI's own URL (e.g. http://127.0.0.1:8188, not the proxy) to check nodes and models")
+    ap.add_argument("--local", action="store_true",
+                    help="also check this computer's GPU and RAM (automatic when --comfyui is on localhost)")
     args = ap.parse_args(argv)
 
     results = local_checks() + target_checks()
+    if args.local or is_local(args.comfyui):
+        results += hardware_checks(gpus(), ram_gb())
     if args.comfyui:
         try:
             info = fetch_object_info(args.comfyui)

@@ -108,3 +108,32 @@ class NoCorsTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManyOriginsTest(unittest.IsolatedAsyncioTestCase):
+    """server.local lets in the live page and the dev server: each gets its own origin back, others nothing."""
+
+    async def asyncSetUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        app = make_app(FakeComfy(), renders_dir=self.tmp.name, cors_origin=[PAGES, "http://localhost:5173"])
+        self.http = TestClient(TestServer(app))
+        await self.http.start_server()
+
+    async def asyncTearDown(self):
+        await self.http.close()
+        self.tmp.cleanup()
+
+    async def test_each_origin_gets_itself(self):
+        for origin in (PAGES, "http://localhost:5173"):
+            res = await self.http.get("/api/health", headers={"Origin": origin})
+            self.assertEqual(res.headers["Access-Control-Allow-Origin"], origin)
+
+    async def test_other_origins_get_nothing(self):
+        res = await self.http.get("/api/health", headers={"Origin": "https://evil.example"})
+        self.assertNotIn("Access-Control-Allow-Origin", res.headers)
+
+    async def test_private_network_preflight(self):
+        res = await self.http.options("/api/look", headers={
+            "Origin": PAGES, "Access-Control-Request-Method": "POST", "Access-Control-Request-Private-Network": "true"})
+        self.assertEqual(res.status, 204)
+        self.assertEqual(res.headers["Access-Control-Allow-Private-Network"], "true")
