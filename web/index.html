@@ -221,6 +221,45 @@
       <div id="viewport">
         <canvas id="view" aria-label="3D view of the scene: drag to orbit, right-drag to pan, wheel to zoom"></canvas>
         <div id="hud"></div>
+        <!-- Scene agent (src/agent/): describe a shot and an agent blocks it out here, then drafts the render prompt. -->
+        <div id="agent">
+          <button id="agent-open" class="agent-pill" aria-expanded="false" aria-controls="agent-panel" title="Describe a shot; an agent blocks it out with stand-ins and a camera">✦ Design with an agent</button>
+          <div id="agent-panel" role="region" aria-label="Scene agent" hidden>
+            <div class="agent-head">
+              <strong>Scene agent</strong>
+              <span id="agent-status" class="muted" aria-live="polite"></span>
+              <button id="agent-settings-btn" class="ghost" aria-expanded="false" aria-controls="agent-settings">Settings</button>
+              <button id="agent-close" class="ghost" aria-label="Close the scene agent" title="Close (Esc)">✕</button>
+            </div>
+            <div id="agent-settings" hidden>
+              <div class="agent-row">
+                <label for="agent-key">Claude API key</label>
+                <input id="agent-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" />
+              </div>
+              <div class="agent-row">
+                <label for="agent-base">via</label>
+                <input id="agent-base" type="text" spellcheck="false" placeholder="blank = api.anthropic.com, or your relay's URL" />
+              </div>
+              <div class="agent-row">
+                <button id="agent-save" class="primary">Save</button>
+                <button id="agent-forget" class="ghost" title="Remove the key from this browser">Forget key</button>
+              </div>
+              <p class="hint">The key is stored only in this browser (localStorage) and sent only to the URL above, never to us.
+                Other agents can drive the same scene tools: <a href="https://github.com/ColinWWW/open-cinema-studio/blob/main/docs/AGENTS.md" target="_blank" rel="noopener">docs/AGENTS.md</a>.</p>
+            </div>
+            <ol id="agent-log"></ol>
+            <div id="agent-result" hidden>
+              <p id="agent-summary"></p>
+              <p id="agent-prompt"></p>
+              <button id="agent-use-prompt" class="primary" title="Put this prompt in the Render panel">Use this prompt…</button>
+            </div>
+            <div class="agent-compose">
+              <textarea id="agent-brief" rows="2" aria-label="Describe the shot" placeholder="Describe the shot: who is where, the place, the camera move… (Ctrl+Enter)"></textarea>
+              <button id="agent-go" class="primary">Build</button>
+              <button id="agent-stop" hidden>Stop</button>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 

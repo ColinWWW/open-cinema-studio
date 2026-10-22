@@ -162,6 +162,13 @@ its depth map (near = white, sky = black).
 With the dev server running, exports are also written to `web/exports/`. Scenes save as JSON;
 the **Blocks** and **Plaza** presets reproduce `scripts/make_test_layout.py`'s clips.
 
+**Design with an agent.** Describe the shot in the panel at the bottom left of the view (*"a dock worker
+beside two containers on a foggy quay, slow dolly in"*). An agent then places the stand-ins, frames and
+moves the camera, checks each shot through its lens, and drafts the render prompt. It uses Claude with your
+own API key, which is kept in your browser, and Ctrl+Z undoes the whole build. Other agents (browser agents,
+Playwright, an MCP bridge, a headless script) drive the same scene tools through `window.ocs.agent` or
+`web/scripts/design-scene.mjs`: see [docs/AGENTS.md](docs/AGENTS.md).
+
 Tests: `cd web && npm test`. Smoke test of the production build as GitHub Pages serves it (no render
 server): `npm run test:e2e` (Playwright; in Chrome the demo clips are also checked to decode).
 

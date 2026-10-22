@@ -11,6 +11,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.132.0",
     "mp4-muxer": "5.2.2",
     "three": "0.186.1"
   },

@@ -5,6 +5,19 @@ Comfy API key** on the live page (`web/src/cloud.js`, the `worker/` relay, set u
 [LIVE_RENDER.md](LIVE_RENDER.md)). The render server (`server/`) is meant for your own machine or pod and
 keeps its key in its own environment; its hardening is in PR #14.
 
+Since then the page also takes a second key: the visitor's own **Claude API key** for the scene agent
+(`web/src/agent/`, [AGENTS.md](AGENTS.md)). It is handled the same way, and the same threat model below
+applies to it:
+
+- It is saved only in this browser's `localStorage` as `ocs.claudeKey`, typed into a password field, and
+  sent only to the URL in the agent's **via** field (blank = `https://api.anthropic.com`).
+- The **via** field is checked the same way as the Comfy one (https only, except localhost; no bare
+  words, so a key pasted into the wrong field is refused).
+- Everything the model sends back (the log, its summary, the drafted prompt) is shown as plain text only.
+  The tools validate every input before it touches the scene.
+
+If a Claude key leaks, revoke it in the [Claude Console](https://console.anthropic.com).
+
 ## Reporting an issue
 
 Please don't open a public issue for anything that could expose someone's key. Use GitHub's private
@@ -82,9 +95,9 @@ Reviewed as an attacker would: `web/src/cloud.js`, how `web/src/render.js` uses 
      also allowed by the relay's `ALLOWED_ORIGINS`. Today that's only this owner's own sites.
      A custom domain for the live page (and that domain alone in `ALLOWED_ORIGINS`) closes it.
    - **Third-party code.** The page loads no third-party scripts, fonts or analytics: `index.html`
-     loads only `/src/main.js` and `/src/style.css`, and the two dependencies (`three`, `mp4-muxer`)
-     are pinned exact versions bundled at build time. A malicious release of either could still read
-     the key, so upgrades should stay deliberate. A Content-Security-Policy meta tag in `index.html`
+     loads only `/src/main.js` and `/src/style.css`, and the dependencies (`three`, `mp4-muxer`, and
+     `@anthropic-ai/sdk`, which loads only when the scene agent runs) are pinned exact versions bundled
+     at build time. A malicious release of any of them could still read the keys, so upgrades should stay deliberate. A Content-Security-Policy meta tag in `index.html`
      (`script-src 'self'`, `connect-src` limited to https) would be a good follow-up; it's outside
      this review's files.
 9. **The relay's `Origin` allowlist doesn't stop scripts.** `curl` can send any `Origin`. With

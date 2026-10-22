@@ -11,6 +11,8 @@ import { confirmDialog } from './dialog.js';
 import { History } from './history.js';
 import { initRenderPanel, loadServer } from './render.js';
 import { initReplay, loadSeen, shouldAutoOpen } from './replay.js';
+import { initAgentPanel } from './agent/panel.js';
+import { ToolError, describeScene, runTool, toolDefinitions } from './agent/tools.js';
 import { decodeScene, hasSharedScene, shareLink, showToast } from './share.js';
 import { addShot, moveShot, removeShot, rescaleShots, selectShot, shotStem } from './shots.js';
 import { FRAME_COUNTS, RESOLUTIONS } from './spec.js';
@@ -142,7 +144,8 @@ function refreshUndo() {
 }
 
 // ---------- scene <-> world ----------
-function loadScene(next) {
+/** Replace the scene (a loaded file, a preset, an agent's edit). Edits sharing a `group` make one undo step. */
+function loadScene(next, group = null) {
   scene = normalizeScene(next);
   frame = 0;
   select(null);
@@ -150,7 +153,7 @@ function loadScene(next) {
   world.setFog(scene.fog);
   if (pilot) enterPilotPose();
   refreshAll();
-  save();
+  save(group);
 }
 
 const selected = () => scene.objects.find((o) => o.id === selectedId) ?? null;
@@ -910,6 +913,60 @@ initReplay({
   autoOpen: !openedShared && shouldAutoOpen({ dev: import.meta.env.DEV, server: loadServer(), seen: loadSeen() }),
 });
 
+// ---------- scene agents (agent/*.js, docs/AGENTS.md) ----------
+/** What shot `i` films at frame `f`, as a JPEG for the view_shot tool. `s` is the live scene (agents edit it in place). */
+function viewShot(s, i, f) {
+  const cam = s.shots[i].camera;
+  const w = 768;
+  const h = Math.round(w / (s.output.width / s.output.height));
+  const target = new THREE.WebGLRenderTarget(w, h);
+  const shotCam = world.shotCam;
+  const saved = { position: shotCam.position.clone(), quaternion: shotCam.quaternion.clone(), fov: shotCam.fov, lensShift: shotCam.lensShift, aspect: shotCam.aspect };
+  try {
+    world.poseObjects(s.objects, f);
+    world.applyShot(cam, poseAt(cam.keys, f, cam.ease), w / h);
+    world.helpers.visible = false;
+    renderer.setRenderTarget(target);
+    renderer.setScissorTest(false);
+    renderer.setClearColor(0x15171a);
+    renderer.clear();
+    renderer.render(world.scene, world.shotCam);
+    const px = new Uint8Array(w * h * 4);
+    renderer.readRenderTargetPixels(target, 0, 0, w, h, px);
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const img = new ImageData(w, h);
+    for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4); // GL rows run bottom-up
+    out.getContext('2d').putImageData(img, 0, 0);
+    return { mediaType: 'image/jpeg', data: out.toDataURL('image/jpeg', 0.85).split(',')[1] };
+  } finally {
+    renderer.setRenderTarget(null);
+    world.helpers.visible = true;
+    world.poseObjects(scene.objects, frame);
+    shotCam.position.copy(saved.position); // piloting: the orbit controls own this pose
+    shotCam.quaternion.copy(saved.quaternion);
+    Object.assign(shotCam, { fov: saved.fov, lensShift: saved.lensShift, aspect: saved.aspect });
+    shotCam.updateProjectionMatrix();
+    shotCam.updateMatrixWorld();
+    target.dispose();
+  }
+}
+
+/** Put a prompt in the Render panel's prompt box, and open the panel when `open`. */
+function usePrompt(text, { open = true } = {}) {
+  $('render-prompt').value = text;
+  $('render-prompt').dispatchEvent(new Event('input'));
+  if (open && $('render-panel').hidden) $('render-open').click();
+}
+
+const agentPanel = initAgentPanel({
+  getScene: () => scene,
+  applyScene: (next, group) => loadScene(next, group),
+  viewShot,
+  usePrompt,
+});
+
 // Hook for scripted checks.
 window.ocs = {
   get scene() {
@@ -920,6 +977,27 @@ window.ocs = {
   loadPreset: (key) => loadScene(PRESETS[key].make()),
   setFrame,
   exportPlayblast: runExport,
+  // For any other agent (a browser agent, Playwright, an MCP bridge): the same tools the panel's agent uses.
+  agent: {
+    tools: toolDefinitions({ canView: true }),
+    describe: () => describeScene(scene),
+    /** Run one tool on the live scene. Throws ToolError (with a message for the agent) on bad input. */
+    call(name, input = {}, { group = 'agent:external' } = {}) {
+      if (name === 'view_shot') {
+        const i = input.shot ?? scene.shot;
+        const f = input.frame ?? 0;
+        if (!Number.isInteger(i) || i < 0 || i >= scene.shots.length) throw new ToolError(`shot must be 0 to ${scene.shots.length - 1}`);
+        if (!Number.isInteger(f) || f < 0 || f > lastFrame()) throw new ToolError(`frame must be 0 to ${lastFrame()}`);
+        return viewShot(scene, i, f);
+      }
+      const out = runTool(scene, name, input);
+      if (out.changed) loadScene(out.scene, group);
+      if (out.prompt) usePrompt(out.prompt, { open: false });
+      return out.result;
+    },
+    run: (brief, opts) => agentPanel.run(brief, opts),
+    open: () => agentPanel.open(),
+  },
 };
 
 // ---------- go ----------
