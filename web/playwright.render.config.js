@@ -6,8 +6,8 @@ import { defineConfig } from '@playwright/test';
 const PYTHON = process.env.PYTHON || 'python';
 // Not the defaults (8188/8189/8190/5173), so a real ComfyUI or dev server on this machine is left alone.
 const PORTS = { comfy: 8288, proxy: 8289, server: 8290, web: 5273 };
-// Seconds a mock job takes: enough that Cancel lands while one is running (the panel polls every second).
-const MOCK_DELAY = process.env.MOCK_DELAY || '4';
+// Seconds a mock job takes: long enough that Cancel lands while one is running (the panel cancels at once).
+const MOCK_DELAY = process.env.MOCK_DELAY || '2';
 
 const python = (args, url) => ({
   command: `${PYTHON} ${args}`,

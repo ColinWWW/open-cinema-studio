@@ -74,6 +74,7 @@ export function initReplay({ demo, onStart, onRender, autoOpen = false }) {
   const $ = (id) => document.getElementById(id);
   const panel = $('replay');
   let run = 0; // a newer start/close cancels older timers
+  let opener = null; // what had focus when the replay opened: focus goes back there on close
 
   const sleep = (ms, mine) => new Promise((resolve, reject) => {
     setTimeout(() => (mine === run ? resolve() : reject(new Error('cancelled'))), ms);
@@ -113,7 +114,9 @@ export function initReplay({ demo, onStart, onRender, autoOpen = false }) {
 
   async function start() {
     const mine = ++run;
+    if (panel.hidden) opener = document.activeElement;
     panel.hidden = false;
+    $('replay-close').focus();
     $('replay-end').hidden = true;
     onStart?.();
     try {
@@ -142,6 +145,9 @@ export function initReplay({ demo, onStart, onRender, autoOpen = false }) {
     panel.hidden = true;
     for (const v of [$('replay-layout'), $('replay-render')]) v.pause();
     saveSeen();
+    // back to ▶ Demo (or whatever opened it); an automatic open had nothing focused, so leave focus be
+    if (opener && opener !== document.body && opener.isConnected) opener.focus();
+    opener = null;
   }
 
   $('replay-layout').src = demo.layout;
@@ -150,6 +156,9 @@ export function initReplay({ demo, onStart, onRender, autoOpen = false }) {
   $('replay-open').addEventListener('click', start);
   $('replay-again').addEventListener('click', start);
   $('replay-close').addEventListener('click', close);
+  panel.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !panel.hidden) close();
+  });
   $('replay-edit').addEventListener('click', close);
   $('replay-render-btn').addEventListener('click', () => {
     close();

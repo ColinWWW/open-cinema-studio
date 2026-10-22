@@ -239,17 +239,41 @@ export function panelState(job, kind) {
 }
 
 /**
+ * Wait `ms`, or less: the wait ends the moment `signal` aborts, so Cancel doesn't wait for the next poll.
+ * The abort listener is removed afterwards either way.
+ */
+export function abortableSleep(ms, signal) {
+  return new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+}
+
+/**
  * Submit one graph, poll the job until it ends, download the first `type` ('video'/'image') output of
  * `outputNode`. Resolves {blob, state}; throws with the node error on failure. `signal` cancels like the
- * server path's runJob: before the submit nothing is sent, after it the Comfy job is cancelled too.
+ * server path's runJob: before the submit nothing is sent, after it the Comfy job is cancelled too, at once.
+ * `sleep(ms, signal)` replaces the wait between polls (tests); it should end early when `signal` aborts.
  */
 export async function runCloudJob(client, graph, { kind, outputNode, type, onUpdate, pollMs = 2000, sleep, signal } = {}) {
-  const wait = sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const wait = sleep ?? abortableSleep;
+  // Cancel the job straight away. One that finished before the cancel landed is kept: the cancel is
+  // refused (or answers 'succeeded'), and the job, read again, has its outputs.
   const stop = async (id) => {
-    if (id) await client.cancel(id).catch(() => {});
+    const ans = await client.cancel(id).catch(() => null);
+    if (!ans || ans.status === 'succeeded') {
+      const job = await client.getJob(id).catch(() => null);
+      if (job?.status === 'succeeded') return job;
+    }
     throw new Error(`${kind} cancelled`);
   };
-  if (signal?.aborted) await stop(null);
+  if (signal?.aborted) throw new Error(`${kind} cancelled`);
   const t0 = Date.now();
   const stateOf = (j) => {
     const s = panelState(j, kind);
@@ -259,10 +283,8 @@ export async function runCloudJob(client, graph, { kind, outputNode, type, onUpd
   let job = await client.submit(graph);
   onUpdate?.(stateOf(job));
   while (!TERMINAL.has(job.status)) {
-    if (signal?.aborted) await stop(job.id);
-    await wait(pollMs);
-    if (signal?.aborted) await stop(job.id);
-    job = await client.getJob(job.id);
+    await wait(pollMs, signal);
+    job = signal?.aborted ? await stop(job.id) : await client.getJob(job.id);
     onUpdate?.(stateOf(job));
   }
   const state = stateOf(job);

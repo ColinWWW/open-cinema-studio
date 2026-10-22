@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import {
-  COMFY_CLOUD, LOOK_NODES, NODES, assetRef, buildLookStill, buildStage1, checkDims, cloudLook, cloudRender, comfyClient,
-  loadCloud, lookSize, normalizeBase, panelState, redact, runCloudJob, saveCloud, stage1Size,
+  COMFY_CLOUD, LOOK_NODES, NODES, abortableSleep, assetRef, buildLookStill, buildStage1, checkDims, cloudLook, cloudRender,
+  comfyClient, loadCloud, lookSize, normalizeBase, panelState, redact, runCloudJob, saveCloud, stage1Size,
 } from '../src/cloud.js';
 import { describeState, loadTarget, saveTarget } from '../src/render.js';
 
@@ -285,6 +285,68 @@ test('Cancel stops a cloud job: nothing sent before the submit, the job cancelle
   await assert.rejects(cloudLook(client, { depth: new Blob(['png']), prompt: 'a plaza', output: { width: 960, height: 576 } }, { signal: ctl.signal }),
     /look cancelled/);
   assert.deepEqual(calls, []); // already cancelled: no upload, no submit
+});
+
+test('abortableSleep ends early on abort and removes its listener', async () => {
+  const ctl = new AbortController();
+  let listeners = 0;
+  const add = ctl.signal.addEventListener.bind(ctl.signal);
+  const remove = ctl.signal.removeEventListener.bind(ctl.signal);
+  ctl.signal.addEventListener = (...a) => (listeners++, add(...a));
+  ctl.signal.removeEventListener = (...a) => (listeners--, remove(...a));
+  const t0 = Date.now();
+  await abortableSleep(5, ctl.signal); // ends by its timer
+  assert.equal(listeners, 0);
+  const long = abortableSleep(60_000, ctl.signal);
+  ctl.abort();
+  await long;
+  assert.ok(Date.now() - t0 < 1000);
+  assert.equal(listeners, 0);
+  await abortableSleep(60_000, ctl.signal); // already aborted: no wait at all
+});
+
+// A sleep that never ends by itself, only when the signal aborts: a runCloudJob that waits out the poll hangs here.
+const onlyOnAbort = (ms, signal) => new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+
+test('Cancel reaches a cloud job at once, not at the next poll', async () => {
+  const calls = [];
+  const ctl = new AbortController();
+  const client = {
+    submit: async () => (calls.push('submit'), { id: 'j2', status: 'in_progress' }),
+    getJob: async () => (calls.push('get'), { id: 'j2', status: 'in_progress' }),
+    cancel: async (id) => (calls.push(`cancel ${id}`), { id, status: 'canceling' }),
+  };
+  const run = runCloudJob(client, { 60: { inputs: {} } }, { kind: 'render', outputNode: '60', type: 'video', pollMs: 60_000, sleep: onlyOnAbort, signal: ctl.signal });
+  await new Promise((r) => setTimeout(r, 10));
+  ctl.abort();
+  await assert.rejects(run, /render cancelled/);
+  assert.deepEqual(calls, ['submit', 'cancel j2']);
+});
+
+test('a cloud job that finished before the cancel landed is kept', async () => {
+  const calls = [];
+  const ctl = new AbortController();
+  const done = { id: 'j3', status: 'succeeded', outputs: [{ node_id: '60', type: 'image', id: 'out-j3' }] };
+  const client = {
+    submit: async () => (calls.push('submit'), { id: 'j3', status: 'running' }),
+    getJob: async () => (calls.push('get'), done),
+    cancel: async () => {
+      calls.push('cancel');
+      throw Object.assign(new Error('job already finished'), { status: 409 });
+    },
+    download: async (id) => (calls.push(`download ${id}`), new Blob(['png'])),
+  };
+  const seen = [];
+  const run = runCloudJob(client, { 60: { inputs: {} } }, {
+    kind: 'look', outputNode: '60', type: 'image', sleep: onlyOnAbort, signal: ctl.signal, onUpdate: (s) => seen.push(s.status),
+  });
+  await new Promise((r) => setTimeout(r, 10));
+  ctl.abort();
+  const { blob, state } = await run;
+  assert.equal(await blob.text(), 'png');
+  assert.equal(state.status, 'succeeded');
+  assert.deepEqual(calls, ['submit', 'cancel', 'get', 'download out-j3']);
+  assert.deepEqual(seen, ['running', 'succeeded']);
 });
 
 test('cancel posts to the job', async () => {
