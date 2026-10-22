@@ -53,18 +53,20 @@ transform.addEventListener('dragging-changed', (e) => (activeOrbit().enabled = !
 transform.addEventListener('objectChange', onTransformChange);
 world.helpers.add(transform.getHelper());
 
-// Shot-camera glyph and path, shown in the work view only.
+// Shot-camera glyph and path, shown in the work view only. ACCENT matches --accent in style.css.
+const ACCENT = 0xd1fe17;
 const camGlyph = new THREE.Group();
 world.helpers.add(camGlyph);
 const glyphCam = new ShiftCamera(45, 5 / 3, 0.2, 1.6);
 const glyph = new THREE.CameraHelper(glyphCam);
+glyph.setColors(...[ACCENT, ACCENT, 0xffffff, 0xffffff, 0x55555c].map((c) => new THREE.Color(c)));
 camGlyph.add(glyphCam, glyph);
-const pathLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xf0b429 }));
+const pathLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: ACCENT }));
 camGlyph.add(pathLine);
 const keyDots = new THREE.Group();
 camGlyph.add(keyDots);
 const keyDotGeo = new THREE.OctahedronGeometry(0.12);
-const keyDotMat = new THREE.MeshBasicMaterial({ color: 0xf0b429, fog: false });
+const keyDotMat = new THREE.MeshBasicMaterial({ color: ACCENT, fog: false });
 
 // The selected stand-in's path, when it moves (in world.helpers: editor views only, never the inset or a playblast).
 const OBJ_PATH = 0x4cc9f0;
@@ -512,7 +514,7 @@ function tick(now) {
   const aspect = outAspect();
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, W, H);
-  renderer.setClearColor(0x15171a);
+  renderer.setClearColor(0x15151a);
   renderer.clear();
 
   if (pilot) {
@@ -556,7 +558,7 @@ function tick(now) {
   renderer.setViewport(x - 2, y - 2, pw + 4, ph + 4);
   renderer.setScissor(x - 2, y - 2, pw + 4, ph + 4);
   renderer.setScissorTest(true);
-  renderer.setClearColor(0xf0b429);
+  renderer.setClearColor(ACCENT);
   renderer.clear();
   renderer.setViewport(x, y, pw, ph);
   renderer.setScissor(x, y, pw, ph);
