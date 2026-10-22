@@ -33,7 +33,7 @@ def name_rules(name):
         # every <NAME> except the one quoted in backticks in the instructions at the top
         ("docs/submission/WRITEUP.md", r"(?<!`)<NAME>(?!`)", esc),
         ("web/index.html", rf"<title>{OLD_NAME}( —|</title>)", rf"<title>{esc}\1"),
-        ("web/index.html", rf'(class="brand">){OLD_NAME}<', rf"\g<1>{esc}<"),
+        ("web/index.html", rf'(class="brand-name">){OLD_NAME}<', rf"\g<1>{esc}<"),
         # link-preview tags (og:site_name, og:title, twitter:title)
         ("web/index.html", rf'(content="){OLD_NAME}\b', rf"\g<1>{esc}"),
         ("scripts/demo/assemble.py", rf'^TITLE = "{OLD_NAME}"$', f'TITLE = "{esc}"'),  # the video's end card

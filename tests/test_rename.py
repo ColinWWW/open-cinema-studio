@@ -42,7 +42,7 @@ def test_name_only(copy):
     assert "\nGreycut\n" in writeup and "I built Greycut to" in writeup
     assert writeup.count("<NAME>") == 1  # only the backticked one in the instructions
     html = read(copy, "web/index.html")
-    assert "<title>Greycut — Blocking</title>" in html and 'class="brand">Greycut<' in html
+    assert "<title>Greycut — Blocking</title>" in html and 'class="brand-name">Greycut<' in html
     assert "Open Cinema Studio" not in html
     # no slug: URLs and base paths stay put
     assert "colinwww.github.io/open-cinema-studio/" in readme

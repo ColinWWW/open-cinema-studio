@@ -50,7 +50,7 @@ header label select { color: var(--text); }
   header { gap: 4px; padding: 8px 10px; }
   header button, header .file-btn { padding-left: 9px; padding-right: 9px; }
   .brand { margin-right: 2px; }
-  .brand span { display: none; }
+  .brand-name { display: none; }
   header select { max-width: 130px; }
   header label:not(.file-btn) { display: grid; gap: 1px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
   header label select { font-size: 13px; text-transform: none; letter-spacing: 0; }
