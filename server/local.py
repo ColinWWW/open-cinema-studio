@@ -154,6 +154,8 @@ def main(argv=None):
     ap.add_argument("--cors-origin", action="append", help="pages that may call the server (default: the live "
                     "page and the dev servers on localhost)")
     args = ap.parse_args(argv)
+    # Line by line even into a log file (nohup, a service): otherwise "Ready" sits in Python's buffer.
+    sys.stdout.reconfigure(line_buffering=True)
 
     if answers(f"http://127.0.0.1:{args.port}/api/health"):
         raise SystemExit(f"Something already answers on port {args.port}: a render server is already running?")
