@@ -47,8 +47,16 @@ export function saveAgentSettings({ provider, key, base, model }, storage = glob
   }
 }
 
-/** One line for the log, e.g. "Added 3 objects: kiosk, crate, woman". */
-export function describeStep({ name, input: raw, result, error }) {
+/** One line for the log, e.g. "Added kiosk, crate, woman". Never throws, whatever the model sent. */
+export function describeStep(step) {
+  try {
+    return stepLine(step);
+  } catch {
+    return step?.error ? `${step.name} — retrying: ${step.error}` : String(step?.name);
+  }
+}
+
+function stepLine({ name, input: raw, result, error }) {
   const input = raw && typeof raw === 'object' ? raw : {}; // a malformed call can come with no input at all
   const what = {
     get_scene: () => 'Read the scene',
@@ -144,6 +152,10 @@ export function initAgentPanel(editor) {
 
   async function run(brief, { createMessage } = {}) {
     if (controller) return null;
+    if (typeof brief !== 'string' || !brief.trim()) {
+      setStatus('Describe the scene first.', true);
+      return null;
+    }
     if (!createMessage && !settings.key) {
       showSettings(true);
       setStatus(`Add your ${PROVIDERS[settings.provider].keyLabel} first.`, true);
@@ -167,7 +179,7 @@ export function initAgentPanel(editor) {
         onScene: (scene) => editor.applyScene(scene, group),
         onStep: (step) => log(describeStep(step), step.error ? 'err' : ''),
       });
-      setStatus('Done. Ctrl+Z undoes the whole build.');
+      setStatus('Done. Ctrl+Z undoes the build.');
       lastPrompt = out.prompt;
       $('agent-summary').textContent = out.summary || 'The scene is built.';
       $('agent-prompt').textContent = out.prompt || '';

@@ -76,7 +76,7 @@ export async function runSceneAgent({ brief, scene, createMessage, host = {}, on
           const out = runTool(scene, call.name, call.input);
           if (out.changed) {
             scene = out.scene;
-            onScene?.(scene);
+            await onScene?.(scene);
           }
           if (out.prompt) prompt = out.prompt;
           content = JSON.stringify(out.result);

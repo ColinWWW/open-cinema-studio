@@ -400,3 +400,13 @@ test('runSceneAgent builds on edits made in the editor while it works (host.getS
   assert.deepEqual(out.scene.objects.map((o) => o.name), ['agent box', 'user person']);
   assert.equal(out.scene.camera.fov, 30);
 });
+
+test('second review: inherited names are not tools, moves or providers; describeStep never throws; long prompts are refused', () => {
+  const s = normalizeScene(blocksScene());
+  for (const name of ['constructor', 'toString', 'hasOwnProperty']) assert.throws(() => runTool(s, name, {}), /unknown tool/);
+  assert.throws(() => runTool(s, 'camera_move', { move: 'toString' }), /move must be one of/);
+  assert.throws(() => createProvider('constructor'), /Unknown provider/);
+  assert.match(describeStep({ name: 'add_objects', input: { objects: 'a box' }, error: 'objects must be a non-empty list' }), /retrying: objects must be a non-empty list/);
+  assert.match(describeStep({ name: 'add_objects', input: { objects: [null] }, error: 'x' }), /retrying: x/);
+  assert.throws(() => runTool(s, 'suggest_prompt', { prompt: 'a'.repeat(1001) }), /at most 1000 characters/);
+});

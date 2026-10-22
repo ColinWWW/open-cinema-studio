@@ -46,7 +46,7 @@ export const PROVIDER_IDS = Object.keys(PROVIDERS);
 
 /** A createMessage for provider `id` ('claude' | 'gemini' | 'openai'). */
 export function createProvider(id, { apiKey, baseURL, model } = {}) {
-  const p = PROVIDERS[id];
+  const p = Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : null;
   if (!p) throw new Error(`Unknown provider ${JSON.stringify(id)}: use ${PROVIDER_IDS.join(', ')}.`);
   return p.create({ apiKey, baseURL: baseURL || undefined, model: model || p.model });
 }

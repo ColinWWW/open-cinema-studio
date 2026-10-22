@@ -115,7 +115,9 @@ since model line-ups change quickly. With the API docs out of reach when this wa
 OpenAI model names come from what each pinned SDK release lists.
 
 A run is at most 40 rounds of tool calls, and **Stop** ends it early. Either way, what it built so far
-stays in the editor, and **Ctrl+Z** undoes the whole run at once. Each SDK loads only when its provider
+stays in the editor, and **Ctrl+Z** undoes the whole run at once. (If you edit the scene while it works,
+the agent builds on your edit rather than overwriting it, and its run splits into one undo step before your
+edit and one after.) Each SDK loads only when its provider
 runs, so the editor doesn't download any of them otherwise.
 
 **Your keys.** The panel asks for your own API key for the provider you pick. Keys are kept only in this

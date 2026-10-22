@@ -12,7 +12,7 @@ import { History } from './history.js';
 import { initRenderPanel, loadServer } from './render.js';
 import { initReplay, loadSeen, shouldAutoOpen } from './replay.js';
 import { initAgentPanel } from './agent/panel.js';
-import { describeScene, runTool, toolDefinitions, viewShotArgs } from './agent/tools.js';
+import { ToolError, describeScene, runTool, toolDefinitions, viewShotArgs } from './agent/tools.js';
 import { decodeScene, hasSharedScene, shareLink, showToast } from './share.js';
 import { addShot, moveShot, removeShot, rescaleShots, selectShot, shotStem } from './shots.js';
 import { FRAME_COUNTS, RESOLUTIONS } from './spec.js';
@@ -30,6 +30,7 @@ let selectedId = null;
 let pilot = false;
 let playing = false;
 let exporting = false;
+let exportDone = null; // resolves when the running export finishes (agents wait for it before touching the world)
 let renderPanel = null; // {refresh}: set up at the end, once the editor is wired
 
 // ---------- three.js setup ----------
@@ -150,13 +151,9 @@ function refreshUndo() {
 // ---------- scene <-> world ----------
 /** Replace the scene (a loaded file, a preset, an agent's edit). Edits sharing a `group` make one undo step. */
 function loadScene(next, group = null) {
-  scene = normalizeScene(next);
   frame = 0;
   select(null);
-  world.syncObjects(scene.objects, frame);
-  world.setFog(scene.fog);
-  if (pilot) enterPilotPose();
-  refreshAll();
+  showScene(normalizeScene(next));
   save(group);
 }
 
@@ -843,6 +840,8 @@ async function saveToDevServer(name, blob) {
 async function runExport() {
   if (exporting) return null;
   exporting = true;
+  let finished;
+  exportDone = new Promise((resolve) => (finished = resolve));
   playing = false;
   $('play').textContent = '▶';
   const panel = $('export-panel');
@@ -889,6 +888,8 @@ async function runExport() {
     exporting = false;
     world.poseObjects(scene.objects, frame); // the exporter walked the stand-ins through every frame
     $('export').disabled = false;
+    exportDone = null;
+    finished();
   }
 }
 $('export').addEventListener('click', () => runExport().catch(() => {}));
@@ -969,11 +970,21 @@ function applyAgentScene(next, group = null) {
   showScene(normalizeScene(next));
   save(group);
 }
+/** Resolves once no playblast export is running: it owns the world (helpers, poses) until it finishes. */
+async function afterExport() {
+  while (exportDone) await exportDone;
+}
 
 const agentPanel = initAgentPanel({
   getScene: () => scene,
-  applyScene: applyAgentScene,
-  viewShot,
+  applyScene: async (next, group) => {
+    await afterExport();
+    applyAgentScene(next, group);
+  },
+  viewShot: async (s, i, f) => {
+    await afterExport();
+    return viewShot(s, i, f);
+  },
   usePrompt,
 });
 
@@ -996,6 +1007,7 @@ window.ocs = {
      * its own undo step unless calls share a `group` (one per agent session, say).
      */
     call(name, input = {}, { group = null } = {}) {
+      if (exporting) throw new ToolError('The editor is exporting a playblast; try again when it finishes.');
       if (name === 'view_shot') {
         const { shot, frame: f } = viewShotArgs(scene, input);
         return viewShot(scene, shot, f);

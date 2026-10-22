@@ -170,3 +170,14 @@ test('scene agent: pick Gemini or ChatGPT in Settings, each with its own key and
   await provider.selectOption('gemini');
   await expect(page.locator('#agent-key')).toHaveValue('AIza-test');
 });
+
+test('scene agent: run() without a brief says so and leaves the panel usable', async ({ page }) => {
+  const out = await page.evaluate(async () => {
+    const first = await window.ocs.agent.run(undefined, { createMessage: async () => ({ stop_reason: 'end_turn', content: [] }) });
+    const second = await window.ocs.agent.run('a quiet street', { createMessage: async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Nothing to do.' }] }) });
+    return { first, summary: second?.summary };
+  });
+  expect(out).toEqual({ first: null, summary: 'Nothing to do.' });
+  await expect(page.locator('#agent-go')).toBeVisible();
+  await expect(page.locator('#agent-brief')).toBeEnabled();
+});

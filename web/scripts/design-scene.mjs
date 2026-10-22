@@ -32,7 +32,7 @@ if (values.help || !brief) {
   console.error(`usage: node scripts/design-scene.mjs [-p ${PROVIDER_IDS.join('|')}] [--model id] [-o scene.json] [--from start.json] "brief"`);
   process.exit(values.help ? 0 : 2);
 }
-const provider = PROVIDERS[values.provider];
+const provider = Object.hasOwn(PROVIDERS, values.provider) ? PROVIDERS[values.provider] : null;
 if (!provider) {
   console.error(`design-scene: --provider must be one of ${PROVIDER_IDS.join(', ')}`);
   process.exit(2);

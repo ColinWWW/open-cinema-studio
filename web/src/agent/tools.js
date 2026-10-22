@@ -338,7 +338,7 @@ const HANDLERS = {
   },
 
   camera_move(scene, input) {
-    if (!(input.move in MOVES)) fail(`move must be one of ${Object.keys(MOVES).join(', ')}`);
+    if (!Object.hasOwn(MOVES, input.move)) fail(`move must be one of ${Object.keys(MOVES).join(', ')}`);
     const i = shotIndex(scene, input.shot);
     selectShot(scene, i);
     const { keys, ease } = cameraMove(input.move, poseAt(scene.camera.keys, 0, scene.camera.ease), scene.output.frames);
@@ -359,6 +359,7 @@ const HANDLERS = {
   },
 
   suggest_prompt(scene, input) {
+    if (typeof input.prompt === 'string' && input.prompt.trim().length > 1000) fail('prompt must be at most 1000 characters; shorten it');
     return { scene, result: { ok: true }, prompt: text(input.prompt, 'prompt', 1000) };
   },
 };
@@ -371,7 +372,7 @@ export const TOOL_NAMES = Object.keys(HANDLERS);
  * suggest_prompt. Throws ToolError on bad input.
  */
 export function runTool(scene, name, input = {}) {
-  const handler = HANDLERS[name];
+  const handler = Object.hasOwn(HANDLERS, name) ? HANDLERS[name] : null; // not 'constructor' and friends
   if (!handler) throw new ToolError(`unknown tool ${JSON.stringify(name)}`);
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new ToolError('input must be an object');
   const out = handler(clone(scene), input);
