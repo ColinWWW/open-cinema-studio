@@ -514,7 +514,7 @@ function tick(now) {
   const aspect = outAspect();
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, W, H);
-  renderer.setClearColor(0x15151a);
+  renderer.setClearColor(0x15171a);
   renderer.clear();
 
   if (pilot) {
