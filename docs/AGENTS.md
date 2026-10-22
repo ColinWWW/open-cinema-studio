@@ -10,7 +10,7 @@ ways in:
 
 | Way in | For | Where |
 | --- | --- | --- |
-| **Agent panel** in the editor | Typing a brief | **✦ Design with an agent**, bottom left of the view. Runs Claude with your own API key. |
+| **Agent panel** in the editor | Typing a brief | **✦ Design with an agent**, bottom left of the view. Runs Claude, Gemini or ChatGPT with your own API key. |
 | **`window.ocs.agent`** in the page | Browser agents, Playwright, an MCP bridge, your own model | `ocs.agent.tools`, `ocs.agent.call(name, input)` |
 | **`scripts/design-scene.mjs`** | Headless runs, batch jobs, CI | `node web/scripts/design-scene.mjs "brief" -o scene.json` |
 
@@ -82,6 +82,14 @@ node scripts/design-scene.mjs "a dock worker beside two containers on a foggy qu
 node scripts/design-scene.mjs --from quay.json "add a second shot, close on the worker"
 ```
 
+Pick the model with `--provider claude|gemini|openai` (`-p`) and optionally `--model`; the key comes from
+`ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) or `OPENAI_API_KEY`:
+
+```bash
+GEMINI_API_KEY=... node scripts/design-scene.mjs -p gemini "a courier crosses an alley at night"
+OPENAI_API_KEY=... node scripts/design-scene.mjs -p openai --model gpt-5.4-mini "a courier crosses an alley at night"
+```
+
 It writes the scene JSON (open it with **Load**), prints the drafted prompt, and prints a link that opens
 the scene in the live editor. There's no renderer here, so the agent works without `view_shot`.
 
@@ -89,15 +97,30 @@ the scene in the live editor. There's no renderer here, so the agent works witho
 with `runTool(scene, name, input)`, and write the scene out as JSON (or a share link with
 `shareLink` from `web/src/share.js`).
 
-## The built-in agent
+## The built-in agent: Claude, Gemini or ChatGPT
 
-The panel and the script use Claude (`claude-opus-5-5`, effort `high`) through the official
-`@anthropic-ai/sdk`. A request that the safety classifiers decline is re-run on Anthropic's recommended
-fallback model (`fallbacks: "default"`). A run is at most 40 rounds of tool calls, and **Stop** ends it early.
-Either way, what it built so far stays in the editor, and **Ctrl+Z** undoes the whole run at once.
+Pick the model provider in the panel's **Settings** (or with `--provider` in the script). Each provider
+keeps its own key, model and relay URL, and the panel uses the one you saved last. All three get the same
+system prompt, the same tools and the same loop (`web/src/agent/runner.js`). Each provider has a small
+adapter in `web/src/agent/providers/` that translates to and from its own API, using its official SDK.
 
-**Your key.** The panel asks for your own Claude API key. It is kept only in this browser
-(`localStorage`, `ocs.claudeKey`) and sent only to the API URL in Settings: `api.anthropic.com`, or a relay
-of yours. It never goes to this project's servers, the same as the Comfy key (see [SECURITY.md](SECURITY.md)).
-Anyone with access to this browser profile can read it, so use a key you can revoke, with a spend limit.
-The SDK only loads when you run the agent, so the editor doesn't download it otherwise.
+| Provider | Default model | API, through | Notes |
+| --- | --- | --- | --- |
+| **Claude** | `claude-opus-5-5`, effort `high` | Messages API, `@anthropic-ai/sdk` | A request the safety classifiers decline is re-run on Anthropic's recommended fallback model (`fallbacks: "default"`). |
+| **Gemini** | `gemini-pro-latest` (Google's alias for its newest Pro model), thinking `HIGH` | `generateContent`, `@google/genai` | Each model turn is replayed exactly as returned, so its thought signatures carry over. `view_shot` images go back inside the function response. |
+| **ChatGPT** | `gpt-5.5`, reasoning effort `high` | Responses API, `openai` | Stateless (`store: false`): each turn's output, encrypted reasoning included, is replayed as returned. `view_shot` images go back as `input_image` in the function output. |
+
+Type any other model id into **Model** (the field suggests a few). The defaults are only a starting point,
+since model line-ups change quickly. With the API docs out of reach when this was written, the Gemini and
+OpenAI model names come from what each pinned SDK release lists.
+
+A run is at most 40 rounds of tool calls, and **Stop** ends it early. Either way, what it built so far
+stays in the editor, and **Ctrl+Z** undoes the whole run at once. Each SDK loads only when its provider
+runs, so the editor doesn't download any of them otherwise.
+
+**Your keys.** The panel asks for your own API key for the provider you pick. Keys are kept only in this
+browser (`localStorage`: `ocs.claudeKey`, `ocs.geminiKey`, `ocs.openaiKey`) and sent only to that
+provider's API (`api.anthropic.com`, `generativelanguage.googleapis.com`, `api.openai.com`) or the relay
+URL you set. They never go to this project's servers, the same as the Comfy key (see
+[SECURITY.md](SECURITY.md)). Anyone with access to this browser profile can read them, so use keys you can
+revoke, with spend limits.

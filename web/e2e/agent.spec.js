@@ -136,3 +136,37 @@ test('scene agent: without a key it asks for one, and a saved key stays in this 
   await page.locator('#agent-forget').click();
   expect(await page.evaluate(() => localStorage.getItem('ocs.claudeKey'))).toBeNull();
 });
+
+test('scene agent: pick Gemini or ChatGPT in Settings, each with its own key and model', async ({ page }) => {
+  await page.locator('#agent-open').click();
+  const provider = page.locator('#agent-provider');
+  await expect(provider.locator('option')).toHaveText(['Claude', 'Gemini', 'ChatGPT (OpenAI)']);
+
+  await provider.selectOption('gemini');
+  await expect(page.locator('#agent-key-label')).toHaveText('Gemini API key');
+  await expect(page.locator('#agent-model')).toHaveAttribute('placeholder', 'gemini-pro-latest');
+  await page.locator('#agent-key').fill('AIza-test');
+  await page.locator('#agent-model').fill('gemini-flash-latest');
+  await page.locator('#agent-save').click();
+  await expect(page.locator('#agent-status')).toHaveText('Gemini (gemini-flash-latest): key saved in this browser.');
+
+  await page.locator('#agent-settings-btn').click();
+  await provider.selectOption('openai');
+  await expect(page.locator('#agent-key-label')).toHaveText('OpenAI API key');
+  await expect(page.locator('#agent-key')).toHaveValue('');
+  await page.locator('#agent-key').fill('sk-test');
+  await page.locator('#agent-save').click();
+  await expect(page.locator('#agent-status')).toContainText('ChatGPT (OpenAI) (gpt-5.5)');
+
+  const stored = await page.evaluate(() => ({ ...localStorage }));
+  expect(stored).toMatchObject({ 'ocs.agentProvider': 'openai', 'ocs.openaiKey': 'sk-test', 'ocs.geminiKey': 'AIza-test', 'ocs.geminiModel': 'gemini-flash-latest' });
+
+  // After a reload the panel opens on the provider picked last, with its own settings.
+  await page.reload();
+  await page.locator('#agent-open').click();
+  await page.locator('#agent-settings-btn').click();
+  await expect(provider).toHaveValue('openai');
+  await expect(page.locator('#agent-key')).toHaveValue('sk-test');
+  await provider.selectOption('gemini');
+  await expect(page.locator('#agent-key')).toHaveValue('AIza-test');
+});

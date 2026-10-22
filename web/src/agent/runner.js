@@ -1,12 +1,12 @@
 // The scene agent's loop: send the brief and the tools, run every tool call the model makes on the scene
-// (tools.js), send the results back, until it stops. The model is plugged in as `createMessage(params)`,
-// which returns a Claude Messages API response; claudeProvider() makes one for the Claude API, and tests
-// (or another provider, adapted to the same shape) pass their own. `host.viewShot` renders a shot for the
-// view_shot tool where there's a renderer (the editor); without it the tool isn't offered.
+// (tools.js), send the results back, until it stops. The model is plugged in as `createMessage(params)`:
+// it takes and returns Claude Messages API shapes (system, tools, messages -> stop_reason, content), and
+// providers/ adapts Claude, Gemini and OpenAI to that; tests pass their own. Content blocks the loop doesn't
+// know (a provider's raw turn, kept for replay) go back in the history untouched. `host.viewShot` renders a
+// shot for the view_shot tool where there's a renderer (the editor); without it the tool isn't offered.
 
 import { describeScene, runTool, toolDefinitions, ToolError } from './tools.js';
 
-export const DEFAULT_MODEL = 'claude-opus-5-5';
 export const MAX_TURNS = 40;
 
 export const SYSTEM_PROMPT = `You block out shots for Open Cinema Studio. A shot here is grey stand-in geometry plus a keyed camera; a video model (LTX-2.5) later renders a cinematic clip that keeps exactly this layout and camera, painted to match a text prompt. Your job is the layout and camera, built with the tools, before anyone writes the render prompt.
@@ -22,50 +22,6 @@ How to work:
 6. End with two or three sentences on what you built.
 
 Keep each move physically plausible: people walk at about 1.4 m/s, and camera moves are a few metres over a clip.`;
-
-/** A readable message for a Claude API failure, from the SDK's typed errors. */
-export function apiErrorMessage(Anthropic, err) {
-  if (err instanceof Anthropic.APIUserAbortError) return 'Stopped.';
-  if (err instanceof Anthropic.AuthenticationError) return 'The Claude API rejected the API key.';
-  if (err instanceof Anthropic.PermissionDeniedError) return 'That key can’t use this model.';
-  if (err instanceof Anthropic.RateLimitError) return 'Rate limited by the Claude API: wait a moment and try again.';
-  if (err instanceof Anthropic.APIConnectionError) return 'Couldn’t reach the Claude API (offline, or the “via” URL is wrong).';
-  if (err instanceof Anthropic.APIError) return `Claude API error ${err.status ?? ''}: ${err.message}`.replace(/\s+:/, ':');
-  return null;
-}
-
-/**
- * A createMessage for the Claude API (browser or node). In the browser the key goes straight to `baseURL`
- * (the Claude API, or a relay of yours) from this page; it never touches our servers. The SDK loads on the
- * first call, so the editor doesn't download it until someone runs an agent.
- */
-export function claudeProvider({ apiKey, baseURL, model = DEFAULT_MODEL, effort = 'high' } = {}) {
-  let sdk = null;
-  return async (params, { signal } = {}) => {
-    sdk ??= import('@anthropic-ai/sdk').then(({ default: Anthropic }) => ({
-      Anthropic,
-      client: new Anthropic({ apiKey, ...(baseURL ? { baseURL } : {}), dangerouslyAllowBrowser: true }),
-    }));
-    const { Anthropic, client } = await sdk;
-    try {
-      return await client.beta.messages.create(
-        {
-          model,
-          max_tokens: 16000,
-          output_config: { effort },
-          // A request the safety classifiers decline is re-run on Anthropic's recommended fallback model.
-          betas: ['server-side-fallback-2026-07-01'],
-          fallbacks: 'default',
-          ...params,
-        },
-        { signal },
-      );
-    } catch (err) {
-      const message = apiErrorMessage(Anthropic, err);
-      throw message ? new Error(message, { cause: err }) : err;
-    }
-  };
-}
 
 const firstText = (content) => content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
 

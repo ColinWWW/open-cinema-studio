@@ -233,8 +233,17 @@
             </div>
             <div id="agent-settings" hidden>
               <div class="agent-row">
-                <label for="agent-key">Claude API key</label>
+                <label for="agent-provider">Model provider</label>
+                <select id="agent-provider"></select>
+              </div>
+              <div class="agent-row">
+                <label id="agent-key-label" for="agent-key">Claude API key</label>
                 <input id="agent-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" />
+              </div>
+              <div class="agent-row">
+                <label for="agent-model">Model</label>
+                <input id="agent-model" type="text" spellcheck="false" list="agent-models" placeholder="claude-opus-5-5" />
+                <datalist id="agent-models"></datalist>
               </div>
               <div class="agent-row">
                 <label for="agent-base">via</label>
@@ -244,7 +253,7 @@
                 <button id="agent-save" class="primary">Save</button>
                 <button id="agent-forget" class="ghost" title="Remove the key from this browser">Forget key</button>
               </div>
-              <p class="hint">The key is stored only in this browser (localStorage) and sent only to the URL above, never to us.
+              <p class="hint">Claude, Gemini or ChatGPT, with your own key. It is stored only in this browser (localStorage) and sent only to that provider's API (or the URL above), never to us.
                 Other agents can drive the same scene tools: <a href="https://github.com/ColinWWW/open-cinema-studio/blob/main/docs/AGENTS.md" target="_blank" rel="noopener">docs/AGENTS.md</a>.</p>
             </div>
             <ol id="agent-log"></ol>

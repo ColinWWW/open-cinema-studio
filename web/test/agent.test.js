@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import Anthropic from '@anthropic-ai/sdk';
-import { describeStep, loadAgentSettings, normalizeAgentBase, saveAgentSettings } from '../src/agent/panel.js';
-import { apiErrorMessage, runSceneAgent } from '../src/agent/runner.js';
+import OpenAI from 'openai';
+import { describeStep, loadAgentSettings, loadProvider, saveAgentSettings } from '../src/agent/panel.js';
+import { claudeErrorMessage } from '../src/agent/providers/claude.js';
+import { fromGeminiResponse, toGeminiContents, toGeminiTools } from '../src/agent/providers/gemini.js';
+import { PROVIDERS, PROVIDER_IDS, createProvider, normalizeBase } from '../src/agent/providers/index.js';
+import { fromOpenAIResponse, openaiErrorMessage, toOpenAIInput, toOpenAITools } from '../src/agent/providers/openai.js';
+import { runSceneAgent } from '../src/agent/runner.js';
 import { TOOL_NAMES, TOOLS, ToolError, VIEW_SHOT, describeScene, runTool, toolDefinitions } from '../src/agent/tools.js';
 import { blocksScene, normalizeScene } from '../src/presets.js';
 
@@ -217,24 +222,142 @@ test('runSceneAgent stops when aborted', async () => {
 
 test('API errors read well, from the SDK error classes', () => {
   const headers = new Headers();
-  assert.equal(apiErrorMessage(Anthropic, new Anthropic.AuthenticationError(401, {}, 'bad key', headers)), 'The Claude API rejected the API key.');
-  assert.match(apiErrorMessage(Anthropic, new Anthropic.RateLimitError(429, {}, 'slow down', headers)), /Rate limited/);
-  assert.match(apiErrorMessage(Anthropic, new Anthropic.InternalServerError(500, {}, 'boom', headers)), /^Claude API error 500:/);
-  assert.equal(apiErrorMessage(Anthropic, new Error('other')), null);
+  assert.equal(claudeErrorMessage(Anthropic, new Anthropic.AuthenticationError(401, {}, 'bad key', headers)), 'The Claude API rejected the API key.');
+  assert.match(claudeErrorMessage(Anthropic, new Anthropic.RateLimitError(429, {}, 'slow down', headers)), /Rate limited/);
+  assert.match(claudeErrorMessage(Anthropic, new Anthropic.InternalServerError(500, {}, 'boom', headers)), /^Claude API error 500:/);
+  assert.equal(claudeErrorMessage(Anthropic, new Error('other')), null);
+  assert.equal(openaiErrorMessage(OpenAI, new OpenAI.AuthenticationError(401, {}, 'bad key', headers)), 'The OpenAI API rejected the API key.');
+  assert.match(openaiErrorMessage(OpenAI, new OpenAI.NotFoundError(404, {}, 'no model', headers)), /doesn’t know that model/);
+  assert.equal(openaiErrorMessage(OpenAI, new Error('other')), null);
 });
 
-test('agent settings: the key stays in this browser; the "via" URL must be https', () => {
+test('agent settings: one key per provider, kept in this browser; the "via" URL must be https', () => {
   const storage = memory();
-  assert.deepEqual(loadAgentSettings(storage), { key: '', base: '' });
-  saveAgentSettings({ key: 'sk-ant-x', base: 'https://relay.example.com' }, storage);
-  assert.deepEqual(loadAgentSettings(storage), { key: 'sk-ant-x', base: 'https://relay.example.com' });
-  saveAgentSettings({ key: '', base: '' }, storage);
-  assert.equal(storage.m.size, 0);
-  assert.equal(normalizeAgentBase(''), '');
-  assert.equal(normalizeAgentBase('relay.example.com/v1/'), 'https://relay.example.com');
-  assert.equal(normalizeAgentBase('http://localhost:8787'), 'http://localhost:8787');
-  assert.throws(() => normalizeAgentBase('http://relay.example.com'), /https/);
-  assert.throws(() => normalizeAgentBase('sk-ant-api03-abc'), /isn’t a web address/);
+  assert.equal(loadProvider(storage), 'claude');
+  assert.deepEqual(loadAgentSettings('claude', storage), { provider: 'claude', key: '', base: '', model: '' });
+  saveAgentSettings({ provider: 'claude', key: 'sk-ant-x', base: '', model: '' }, storage);
+  assert.equal(storage.m.get('ocs.claudeKey'), 'sk-ant-x', 'same storage key as before providers existed');
+  saveAgentSettings({ provider: 'gemini', key: 'AIza-y', base: 'https://relay.example.com', model: 'gemini-flash-latest' }, storage);
+  assert.equal(loadProvider(storage), 'gemini');
+  assert.deepEqual(loadAgentSettings('gemini', storage), { provider: 'gemini', key: 'AIza-y', base: 'https://relay.example.com', model: 'gemini-flash-latest' });
+  assert.equal(loadAgentSettings('claude', storage).key, 'sk-ant-x');
+  saveAgentSettings({ provider: 'openai', key: '', base: '', model: '' }, storage, { activate: false });
+  assert.equal(loadProvider(storage), 'gemini', 'forgetting another provider’s key keeps the active one');
+  saveAgentSettings({ provider: 'claude', key: '', base: '', model: '' }, storage);
+  saveAgentSettings({ provider: 'gemini', key: '', base: '', model: '' }, storage, { activate: false });
+  assert.equal(storage.m.size, 0, 'Claude is the default, so nothing is left behind');
+
+  assert.equal(normalizeBase(''), '');
+  assert.equal(normalizeBase('relay.example.com/v1/'), 'https://relay.example.com');
+  assert.equal(normalizeBase('relay.example.com', 'openai'), 'https://relay.example.com/v1');
+  assert.equal(normalizeBase('https://relay.example.com/v1', 'openai'), 'https://relay.example.com/v1');
+  assert.equal(normalizeBase('https://relay.example.com/v1beta/', 'gemini'), 'https://relay.example.com');
+  assert.equal(normalizeBase('http://localhost:8787'), 'http://localhost:8787');
+  assert.throws(() => normalizeBase('http://relay.example.com'), /https/);
+  assert.throws(() => normalizeBase('sk-ant-api03-abc'), /isn’t a web address/);
+});
+
+test('providers: Claude, Gemini and ChatGPT, each with a default model', () => {
+  assert.deepEqual(PROVIDER_IDS, ['claude', 'gemini', 'openai']);
+  assert.equal(PROVIDERS.claude.model, 'claude-opus-5-5');
+  for (const id of PROVIDER_IDS) {
+    assert.ok(PROVIDERS[id].models.includes(PROVIDERS[id].model), id);
+    assert.equal(typeof createProvider(id, { apiKey: 'k' }), 'function', id);
+  }
+  assert.throws(() => createProvider('llama'), /Unknown provider/);
+});
+
+// One round trip: the model calls two tools (one is view_shot), gets the results, finishes.
+const history = [
+  { role: 'user', content: 'Brief: a van' },
+  {
+    role: 'assistant',
+    content: [
+      { type: 'text', text: 'Adding a van.' },
+      { type: 'tool_use', id: 'c1', name: 'add_objects', input: { objects: [] } },
+      { type: 'tool_use', id: 'c2', name: 'view_shot', input: { frame: 0 } },
+    ],
+  },
+  {
+    role: 'user',
+    content: [
+      { type: 'tool_result', tool_use_id: 'c1', content: 'objects must be a non-empty list', is_error: true },
+      { type: 'tool_result', tool_use_id: 'c2', content: [{ type: 'text', text: 'Shot 0 at frame 0:' }, { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } }] },
+    ],
+  },
+];
+
+test('Gemini: tools as JSON Schema, results as function responses (image inside), model turns replayed as they came', () => {
+  const [decl] = toGeminiTools(TOOLS);
+  assert.equal(decl.functionDeclarations.length, TOOLS.length);
+  assert.deepEqual(decl.functionDeclarations[2].parametersJsonSchema, TOOLS[2].input_schema);
+
+  const contents = toGeminiContents(history);
+  assert.deepEqual(contents[0], { role: 'user', parts: [{ text: 'Brief: a van' }] });
+  assert.deepEqual(contents[1].parts.map((p) => Object.keys(p)[0]), ['text', 'functionCall', 'functionCall']);
+  const [err, view] = contents[2].parts.map((p) => p.functionResponse);
+  assert.deepEqual(err, { name: 'add_objects', response: { error: 'objects must be a non-empty list' } });
+  assert.equal(view.name, 'view_shot');
+  assert.deepEqual(view.parts, [{ inlineData: { mimeType: 'image/jpeg', data: 'AAAA' } }]);
+
+  // A response with a thought signature: the model turn comes back verbatim, ids map to function responses.
+  const raw = { role: 'model', parts: [{ text: 'thinking…', thought: true }, { functionCall: { id: 'g9', name: 'get_scene', args: {} }, thoughtSignature: 'c2ln' }, { functionCall: { name: 'suggest_prompt', args: { prompt: 'p' } } }] };
+  const out = fromGeminiResponse({ candidates: [{ content: raw, finishReason: 'STOP' }] }, 3);
+  assert.equal(out.stop_reason, 'tool_use');
+  assert.deepEqual(out.content.filter((b) => b.type === 'tool_use').map((b) => [b.id, b.name]), [['g9', 'get_scene'], ['gemini_3_1', 'suggest_prompt']]);
+  assert.ok(!out.content.some((b) => b.type === 'text'), 'thoughts are not shown as text');
+  const replay = toGeminiContents([{ role: 'assistant', content: out.content }, { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'g9', content: '{"name":"x"}' }, { type: 'tool_result', tool_use_id: 'gemini_3_1', content: '{"ok":true}' }] }]);
+  assert.equal(replay[0], raw);
+  assert.deepEqual(replay[1].parts.map((p) => p.functionResponse), [{ id: 'g9', name: 'get_scene', response: { name: 'x' } }, { name: 'suggest_prompt', response: { ok: true } }]);
+
+  assert.equal(fromGeminiResponse({ candidates: [{ content: { role: 'model', parts: [{ text: 'Done.' }] }, finishReason: 'STOP' }] }).stop_reason, 'end_turn');
+  assert.equal(fromGeminiResponse({ candidates: [{ content: { role: 'model', parts: [] }, finishReason: 'SAFETY' }] }).stop_reason, 'refusal');
+  assert.equal(fromGeminiResponse({ promptFeedback: { blockReason: 'OTHER' } }).stop_reason, 'refusal');
+  assert.equal(fromGeminiResponse({ candidates: [{ content: { role: 'model', parts: [] }, finishReason: 'MAX_TOKENS' }] }).stop_reason, 'max_tokens');
+  assert.throws(() => fromGeminiResponse({ candidates: [{ finishReason: 'MALFORMED_FUNCTION_CALL' }] }), /couldn’t finish/);
+});
+
+test('OpenAI: function tools, function_call_output (image as input_image), output items replayed as they came', () => {
+  const tools = toOpenAITools(TOOLS);
+  assert.deepEqual(tools[0], { type: 'function', name: 'get_scene', description: TOOLS[0].description, parameters: TOOLS[0].input_schema, strict: false });
+
+  const input = toOpenAIInput(history);
+  assert.deepEqual(input[0], { role: 'user', content: 'Brief: a van' });
+  assert.deepEqual(input.slice(1, 4).map((i) => i.type ?? i.role), ['assistant', 'function_call', 'function_call']);
+  assert.deepEqual(input[4], { type: 'function_call_output', call_id: 'c1', output: 'Error: objects must be a non-empty list' });
+  assert.deepEqual(input[5].output, [{ type: 'input_text', text: 'Shot 0 at frame 0:' }, { type: 'input_image', image_url: 'data:image/jpeg;base64,AAAA' }]);
+
+  const output = [
+    { type: 'reasoning', id: 'rs_1', encrypted_content: 'enc', summary: [] },
+    { type: 'function_call', call_id: 'call_a', name: 'new_scene', arguments: '{"name":"alley"}' },
+    { type: 'function_call', call_id: 'call_b', name: 'get_scene', arguments: '{oops' },
+  ];
+  const out = fromOpenAIResponse({ output, status: 'completed' });
+  assert.equal(out.stop_reason, 'tool_use');
+  assert.deepEqual(out.content.filter((b) => b.type === 'tool_use').map((b) => [b.id, b.input]), [['call_a', { name: 'alley' }], ['call_b', null]]);
+  const replay = toOpenAIInput([{ role: 'assistant', content: out.content }]);
+  assert.deepEqual(replay, output, 'reasoning and calls go back exactly as returned');
+
+  const done = fromOpenAIResponse({ output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Built it.' }] }] });
+  assert.equal(done.stop_reason, 'end_turn');
+  assert.equal(done.content.find((b) => b.type === 'text').text, 'Built it.');
+  const refused = fromOpenAIResponse({ output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'No.' }] }] });
+  assert.deepEqual([refused.stop_reason, refused.stop_details.explanation], ['refusal', 'No.']);
+  assert.equal(fromOpenAIResponse({ output: [], status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } }).stop_reason, 'max_tokens');
+});
+
+test('runSceneAgent with a Gemini- or OpenAI-shaped model: provider state stays in the history and tools still run', async () => {
+  for (const make of [
+    (turn) => fromGeminiResponse({ candidates: [{ content: { role: 'model', parts: turn ? [{ text: 'Done.' }] : [{ functionCall: { name: 'new_scene', args: { name: 'g' } }, thoughtSignature: 'sig' }] }, finishReason: 'STOP' }] }, turn),
+    (turn) => fromOpenAIResponse({ output: turn ? [{ type: 'message', content: [{ type: 'output_text', text: 'Done.' }] }] : [{ type: 'function_call', call_id: 'c', name: 'new_scene', arguments: '{"name":"g"}' }] }),
+  ]) {
+    let turn = 0;
+    const sent = [];
+    const out = await runSceneAgent({ brief: 'x', scene: blank(), createMessage: async (p) => (sent.push(structuredClone(p)), make(turn++)) });
+    assert.equal(out.scene.name, 'g');
+    assert.equal(out.summary, 'Done.');
+    assert.equal(sent[1].messages[1].content[0].type, 'provider_state');
+  }
 });
 
 test('log lines', () => {

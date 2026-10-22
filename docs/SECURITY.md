@@ -5,18 +5,21 @@ Comfy API key** on the live page (`web/src/cloud.js`, the `worker/` relay, set u
 [LIVE_RENDER.md](LIVE_RENDER.md)). The render server (`server/`) is meant for your own machine or pod and
 keeps its key in its own environment; its hardening is in PR #14.
 
-Since then the page also takes a second key: the visitor's own **Claude API key** for the scene agent
-(`web/src/agent/`, [AGENTS.md](AGENTS.md)). It is handled the same way, and the same threat model below
-applies to it:
+Since then the page also takes the visitor's own **Claude, Gemini or OpenAI API key** for the scene agent
+(`web/src/agent/`, [AGENTS.md](AGENTS.md)). These keys are handled the same way, and the same threat model
+below applies to them:
 
-- It is saved only in this browser's `localStorage` as `ocs.claudeKey`, typed into a password field, and
-  sent only to the URL in the agent's **via** field (blank = `https://api.anthropic.com`).
+- Each is saved only in this browser's `localStorage` (`ocs.claudeKey`, `ocs.geminiKey`, `ocs.openaiKey`),
+  typed into a password field, and sent only to the URL in the agent's **via** field (blank = that
+  provider's own API: `https://api.anthropic.com`, `https://generativelanguage.googleapis.com` or
+  `https://api.openai.com/v1`).
 - The **via** field is checked the same way as the Comfy one (https only, except localhost; no bare
   words, so a key pasted into the wrong field is refused).
 - Everything the model sends back (the log, its summary, the drafted prompt) is shown as plain text only.
   The tools validate every input before it touches the scene.
 
-If a Claude key leaks, revoke it in the [Claude Console](https://console.anthropic.com).
+If one of these keys leaks, revoke it where it was made: the [Claude Console](https://console.anthropic.com),
+[Google AI Studio](https://aistudio.google.com/apikey) or the [OpenAI dashboard](https://platform.openai.com/api-keys).
 
 ## Reporting an issue
 
@@ -96,7 +99,8 @@ Reviewed as an attacker would: `web/src/cloud.js`, how `web/src/render.js` uses 
      A custom domain for the live page (and that domain alone in `ALLOWED_ORIGINS`) closes it.
    - **Third-party code.** The page loads no third-party scripts, fonts or analytics: `index.html`
      loads only `/src/main.js` and `/src/style.css`, and the dependencies (`three`, `mp4-muxer`, and
-     `@anthropic-ai/sdk`, which loads only when the scene agent runs) are pinned exact versions bundled
+     `@anthropic-ai/sdk`, `@google/genai` and `openai`, each loaded only when the scene agent runs on that
+     provider) are pinned exact versions bundled
      at build time. A malicious release of any of them could still read the keys, so upgrades should stay deliberate. A Content-Security-Policy meta tag in `index.html`
      (`script-src 'self'`, `connect-src` limited to https) would be a good follow-up; it's outside
      this review's files.
