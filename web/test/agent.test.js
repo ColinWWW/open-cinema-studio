@@ -8,7 +8,7 @@ import { fromGeminiResponse, toGeminiContents, toGeminiTools } from '../src/agen
 import { PROVIDERS, PROVIDER_IDS, createProvider, normalizeBase } from '../src/agent/providers/index.js';
 import { fromOpenAIResponse, openaiErrorMessage, toOpenAIInput, toOpenAITools } from '../src/agent/providers/openai.js';
 import { runSceneAgent } from '../src/agent/runner.js';
-import { TOOL_NAMES, TOOLS, ToolError, VIEW_SHOT, describeScene, runTool, toolDefinitions } from '../src/agent/tools.js';
+import { TOOL_NAMES, TOOLS, ToolError, VIEW_SHOT, describeScene, runTool, toolDefinitions, viewShotArgs } from '../src/agent/tools.js';
 import { blocksScene, normalizeScene } from '../src/presets.js';
 
 const blank = () => runTool(normalizeScene(null), 'new_scene', { name: 'test' }).scene;
@@ -364,4 +364,39 @@ test('log lines', () => {
   assert.equal(describeStep({ name: 'add_objects', input: { objects: [{ name: 'kiosk' }, { type: 'person' }] } }), 'Added kiosk, person');
   assert.equal(describeStep({ name: 'camera_move', input: { move: 'dolly_in' } }), 'Camera move: dolly in');
   assert.match(describeStep({ name: 'update_object', input: {}, error: 'no object' }), /retrying: no object/);
+});
+
+test('review fixes: tilt survives a move, new_scene keeps the size, view_shot args checked, no crash on a null input', () => {
+  let s = runTool(blank(), 'add_objects', { objects: [{ type: 'plane', name: 'sign', position: [0, 0, 5] }] }).scene;
+  s.objects[0].rotation = [0.3, 1.2, 0.1]; // tilted with the rotate gizmo
+  const id = s.objects[0].id;
+  s = runTool(s, 'update_object', { id, position: [1, 0, 5], turn: 90 }).scene;
+  assert.deepEqual([s.objects[0].rotation[0], s.objects[0].rotation[2]], [0.3, 0.1]);
+  s = runTool(s, 'animate_object', { id, keys: [{ frame: 0, position: [1, 0, 5] }, { frame: 64, position: [2, 0, 5], turn: 0 }] }).scene;
+  assert.ok(s.objects[0].keys.every((k) => k.rotation[0] === 0.3 && k.rotation[2] === 0.1));
+
+  const big = normalizeScene({ ...blocksScene(), output: { width: 1920, height: 1088, frames: 65 } });
+  assert.deepEqual(runTool(big, 'new_scene', { name: 'x' }).scene.output, { width: 1920, height: 1088, frames: 65, fps: 24 });
+
+  assert.deepEqual(viewShotArgs(big, null), { shot: 0, frame: 0 });
+  assert.deepEqual(viewShotArgs(big, { frame: 64 }), { shot: 0, frame: 64 });
+  assert.throws(() => viewShotArgs(big, { frame: 65 }), ToolError);
+  assert.throws(() => viewShotArgs(big, { shot: 3 }), ToolError);
+
+  assert.equal(describeStep({ name: 'add_objects', input: null, error: 'input must be an object' }), 'Added  — retrying: input must be an object');
+});
+
+test('runSceneAgent builds on edits made in the editor while it works (host.getScene)', async () => {
+  let editor = blank();
+  const { createMessage } = scripted(
+    { stop_reason: 'tool_use', content: [toolUse('a', 'add_objects', { objects: [{ type: 'box', name: 'agent box', position: [0, 0, 5] }] })] },
+    () => {
+      editor = runTool(editor, 'add_objects', { objects: [{ type: 'person', name: 'user person', position: [1, 0, 3] }] }).scene; // the user adds one meanwhile
+      return { stop_reason: 'tool_use', content: [toolUse('b', 'set_camera', { fov: 30 })] };
+    },
+    { stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }] },
+  );
+  const out = await runSceneAgent({ brief: 'x', scene: editor, createMessage, host: { getScene: () => editor }, onScene: (s) => (editor = s) });
+  assert.deepEqual(out.scene.objects.map((o) => o.name), ['agent box', 'user person']);
+  assert.equal(out.scene.camera.fov, 30);
 });

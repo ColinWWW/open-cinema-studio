@@ -12,7 +12,7 @@ import { History } from './history.js';
 import { initRenderPanel, loadServer } from './render.js';
 import { initReplay, loadSeen, shouldAutoOpen } from './replay.js';
 import { initAgentPanel } from './agent/panel.js';
-import { ToolError, describeScene, runTool, toolDefinitions } from './agent/tools.js';
+import { describeScene, runTool, toolDefinitions, viewShotArgs } from './agent/tools.js';
 import { decodeScene, hasSharedScene, shareLink, showToast } from './share.js';
 import { addShot, moveShot, removeShot, rescaleShots, selectShot, shotStem } from './shots.js';
 import { FRAME_COUNTS, RESOLUTIONS } from './spec.js';
@@ -116,15 +116,19 @@ function persist() {
 // ---------- undo / redo ----------
 /** Put an undo snapshot back, keeping the frame and the selection when they still exist. */
 function restore(snap) {
-  scene = snap;
+  showScene(snap);
+  refreshUndo();
+  persist();
+}
+/** Show `next` in place of the scene, keeping the frame and the selection when they still exist. */
+function showScene(next) {
+  scene = next;
   frame = Math.min(frame, lastFrame());
   world.syncObjects(scene.objects, frame);
   world.setFog(scene.fog);
   select(scene.objects.some((o) => o.id === selectedId) ? selectedId : null);
   if (pilot) enterPilotPose();
   refreshAll();
-  refreshUndo();
-  persist();
 }
 function undo() {
   if (transform.dragging) return; // mid-drag: the drag is the step being made
@@ -960,9 +964,15 @@ function usePrompt(text, { open = true } = {}) {
   if (open && $('render-panel').hidden) $('render-open').click();
 }
 
+/** An agent's edit: shown without moving the playhead or dropping the selection; edits in one `group` are one undo step. */
+function applyAgentScene(next, group = null) {
+  showScene(normalizeScene(next));
+  save(group);
+}
+
 const agentPanel = initAgentPanel({
   getScene: () => scene,
-  applyScene: (next, group) => loadScene(next, group),
+  applyScene: applyAgentScene,
   viewShot,
   usePrompt,
 });
@@ -981,17 +991,17 @@ window.ocs = {
   agent: {
     tools: toolDefinitions({ canView: true }),
     describe: () => describeScene(scene),
-    /** Run one tool on the live scene. Throws ToolError (with a message for the agent) on bad input. */
-    call(name, input = {}, { group = 'agent:external' } = {}) {
+    /**
+     * Run one tool on the live scene. Throws ToolError (with a message for the agent) on bad input. Each call is
+     * its own undo step unless calls share a `group` (one per agent session, say).
+     */
+    call(name, input = {}, { group = null } = {}) {
       if (name === 'view_shot') {
-        const i = input.shot ?? scene.shot;
-        const f = input.frame ?? 0;
-        if (!Number.isInteger(i) || i < 0 || i >= scene.shots.length) throw new ToolError(`shot must be 0 to ${scene.shots.length - 1}`);
-        if (!Number.isInteger(f) || f < 0 || f > lastFrame()) throw new ToolError(`frame must be 0 to ${lastFrame()}`);
-        return viewShot(scene, i, f);
+        const { shot, frame: f } = viewShotArgs(scene, input);
+        return viewShot(scene, shot, f);
       }
       const out = runTool(scene, name, input);
-      if (out.changed) loadScene(out.scene, group);
+      if (out.changed) applyAgentScene(out.scene, group);
       if (out.prompt) usePrompt(out.prompt, { open: false });
       return out.result;
     },

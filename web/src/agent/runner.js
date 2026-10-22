@@ -4,8 +4,10 @@
 // providers/ adapts Claude, Gemini and OpenAI to that; tests pass their own. Content blocks the loop doesn't
 // know (a provider's raw turn, kept for replay) go back in the history untouched. `host.viewShot` renders a
 // shot for the view_shot tool where there's a renderer (the editor); without it the tool isn't offered.
+// `host.getScene` (the editor) gives the live scene before each tool call, so the agent builds on any edit
+// made while it works rather than overwriting it.
 
-import { describeScene, runTool, toolDefinitions, ToolError } from './tools.js';
+import { describeScene, runTool, toolDefinitions, ToolError, viewShotArgs } from './tools.js';
 
 export const MAX_TURNS = 40;
 
@@ -59,13 +61,11 @@ export async function runSceneAgent({ brief, scene, createMessage, host = {}, on
     const results = [];
     for (const call of calls) {
       signal?.throwIfAborted();
+      if (host.getScene) scene = host.getScene(); // edits made in the editor meanwhile (or an undo) are kept
       try {
         let content;
         if (call.name === 'view_shot' && host.viewShot) {
-          const shot = call.input?.shot ?? scene.shot;
-          const frame = call.input?.frame ?? 0;
-          if (!Number.isInteger(shot) || shot < 0 || shot >= scene.shots.length) throw new ToolError(`shot must be 0 to ${scene.shots.length - 1}`);
-          if (!Number.isInteger(frame) || frame < 0 || frame >= scene.output.frames) throw new ToolError(`frame must be 0 to ${scene.output.frames - 1}`);
+          const { shot, frame } = viewShotArgs(scene, call.input);
           const image = await host.viewShot(scene, shot, frame);
           content = [
             { type: 'text', text: `Shot ${shot} ("${scene.shots[shot].name}") at frame ${frame}:` },

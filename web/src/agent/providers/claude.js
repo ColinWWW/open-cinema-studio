@@ -2,6 +2,8 @@
 // model settings and turns SDK errors into readable messages.
 
 export const CLAUDE_MODEL = 'claude-opus-5-5';
+// Models that take server-side refusal fallbacks in the "default" form; others (Haiku) would reject the request.
+const FALLBACK_MODELS = new Set(['claude-fable-5-1', 'claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5']);
 
 /** A readable message for a Claude API failure, from the SDK's typed errors. */
 export function claudeErrorMessage(Anthropic, err) {
@@ -33,9 +35,10 @@ export function claudeProvider({ apiKey, baseURL, model = CLAUDE_MODEL, effort =
           model,
           max_tokens: 16000,
           output_config: { effort },
+          // The system prompt, tools and history repeat every round: cache them.
+          cache_control: { type: 'ephemeral' },
           // A request the safety classifiers decline is re-run on Anthropic's recommended fallback model.
-          betas: ['server-side-fallback-2026-07-01'],
-          fallbacks: 'default',
+          ...(FALLBACK_MODELS.has(model) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
           ...params,
         },
         { signal },

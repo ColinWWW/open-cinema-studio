@@ -230,6 +230,12 @@ export const VIEW_SHOT = {
   input_schema: { type: 'object', properties: { shot: SHOT, frame: { type: 'integer', description: 'Default 0.' } } },
 };
 
+/** {shot, frame} for a view_shot call, checked against `scene` (the host renders it; see runner.js, main.js). */
+export function viewShotArgs(scene, input) {
+  const i = input && typeof input === 'object' ? input : {};
+  return { shot: shotIndex(scene, i.shot), frame: i.frame === undefined ? 0 : frameOf(scene, i.frame) };
+}
+
 /** The tools to offer an agent; view_shot only when the host can render it. */
 export const toolDefinitions = ({ canView = false } = {}) => (canView ? [...TOOLS, VIEW_SHOT] : TOOLS);
 
@@ -245,8 +251,9 @@ function applyFields(obj, input) {
     const d = position.map((v, i) => v - obj.position[i]);
     const dTurn = turn !== undefined ? turn - obj.rotation[1] : 0;
     obj.position = position;
-    obj.rotation = [0, obj.rotation[1] + dTurn, 0];
-    if (obj.keys) obj.keys = obj.keys.map((k) => ({ ...k, position: k.position.map((v, i) => v + d[i]), rotation: [0, k.rotation[1] + dTurn, 0] }));
+    const turned = (r) => [r[0], r[1] + dTurn, r[2]]; // a tilt set with the rotate gizmo stays
+    obj.rotation = turned(obj.rotation);
+    if (obj.keys) obj.keys = obj.keys.map((k) => ({ ...k, position: k.position.map((v, i) => v + d[i]), rotation: turned(k.rotation) }));
   }
   return obj;
 }
@@ -254,9 +261,11 @@ function applyFields(obj, input) {
 const HANDLERS = {
   get_scene: (scene) => ({ scene, result: describeScene(scene) }),
 
-  new_scene(_scene, input) {
+  new_scene(current, input) {
     const next = normalizeScene(emptyScene());
     next.name = text(input.name, 'name').replace(/[^\w.-]+/g, '_');
+    next.output.width = current.output.width; // the size picked in the header stays
+    next.output.height = current.output.height;
     if (input.frames !== undefined) {
       if (!FRAME_COUNTS.includes(input.frames)) fail(`frames must be one of ${FRAME_COUNTS.join(', ')}`);
       rescaleShots(next, next.output.frames, input.frames);
@@ -303,7 +312,7 @@ const HANDLERS = {
     const keys = input.keys.map((k, i) => ({
       frame: frameOf(scene, k?.frame, `keys[${i}].frame`),
       position: vec3(k.position, `keys[${i}].position`),
-      rotation: [0, k.turn !== undefined ? num(k.turn, `keys[${i}].turn`, -3600, 3600) * DEG : obj.rotation[1], 0],
+      rotation: [obj.rotation[0], k.turn !== undefined ? num(k.turn, `keys[${i}].turn`, -3600, 3600) * DEG : obj.rotation[1], obj.rotation[2]],
     }));
     if (new Set(keys.map((k) => k.frame)).size !== keys.length) fail('two keys on the same frame');
     delete obj.keys;

@@ -62,8 +62,8 @@ const frame = call('view_shot', { frame: 0 }); // { mediaType: 'image/jpeg', dat
 call('suggest_prompt', { prompt: 'A narrow alley at night, a white delivery van on the right, a courier walking towards it, slow truck left.' });
 ```
 
-Each call is applied to the live scene; consecutive calls make one undo step. A suggested prompt fills the
-Render panel's prompt box.
+Each call is applied to the live scene as its own undo step; pass `{ group: 'my-session' }` as a third
+argument to make a session's calls one step. A suggested prompt fills the Render panel's prompt box.
 
 To run the built-in loop with another model, pass `createMessage`: a function that takes Messages API
 params (`system`, `tools`, `messages`) and returns a response in the same shape (`stop_reason`, `content`

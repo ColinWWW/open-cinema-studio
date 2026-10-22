@@ -48,7 +48,8 @@ export function saveAgentSettings({ provider, key, base, model }, storage = glob
 }
 
 /** One line for the log, e.g. "Added 3 objects: kiosk, crate, woman". */
-export function describeStep({ name, input = {}, result, error }) {
+export function describeStep({ name, input: raw, result, error }) {
+  const input = raw && typeof raw === 'object' ? raw : {}; // a malformed call can come with no input at all
   const what = {
     get_scene: () => 'Read the scene',
     new_scene: () => `New scene “${input.name}”`,
@@ -161,7 +162,7 @@ export function initAgentPanel(editor) {
         brief,
         scene: editor.getScene(),
         createMessage: createMessage || createProvider(settings.provider, { apiKey: settings.key, baseURL: settings.base, model: settings.model }),
-        host: { viewShot: editor.viewShot },
+        host: { viewShot: editor.viewShot, getScene: editor.getScene },
         signal: controller.signal,
         onScene: (scene) => editor.applyScene(scene, group),
         onStep: (step) => log(describeStep(step), step.error ? 'err' : ''),
