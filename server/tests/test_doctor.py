@@ -2,7 +2,7 @@
 
 import unittest
 
-from server.doctor import check_graphs, combo_options, target_checks
+from server.doctor import check_graphs, combo_options, hardware_checks, is_local, lowvram, target_checks
 from server.workflow import MODELS, build_stage1
 
 
@@ -64,6 +64,47 @@ class DoctorTest(unittest.TestCase):
         ok, msg = target_checks({})[0]
         self.assertFalse(ok)
         self.assertIn("COMFY_API_KEY", msg)
+
+
+
+class HardwareTest(unittest.TestCase):
+    """--local: are this computer's GPU and RAM enough to render here?"""
+
+    def test_no_gpu(self):
+        (ok, msg), = hardware_checks([], 64)
+        self.assertFalse(ok)
+        self.assertIn("Comfy Cloud", msg)
+
+    def test_big_card(self):
+        self.assertEqual([ok for ok, _ in hardware_checks([("NVIDIA A40", 44.4)], 128)], [True, True])
+        self.assertFalse(lowvram(44.4))
+
+    def test_mid_card_runs_lowvram(self):
+        (ok, msg), _ = hardware_checks([("RTX 4080", 16.0)], 64)
+        self.assertTrue(ok)
+        self.assertIn("--lowvram", msg)
+        self.assertTrue(lowvram(16.0))
+
+    def test_small_card(self):
+        (ok, msg), _ = hardware_checks([("RTX A2000 8GB Laptop GPU", 8.0)], 31.7)
+        self.assertFalse(ok)
+        self.assertIn("look stills will run", msg)
+
+    def test_picks_the_biggest_card(self):
+        (ok, msg), _ = hardware_checks([("small", 8.0), ("big", 24.0)], 64)
+        self.assertTrue(ok)
+        self.assertIn("big", msg)
+
+    def test_ram(self):
+        self.assertFalse(hardware_checks([("A", 24.0)], 16)[1][0])
+        self.assertIn("slow", hardware_checks([("A", 24.0)], 32)[1][1])
+        self.assertTrue(hardware_checks([("A", 24.0)], None)[1][0])
+
+    def test_is_local(self):
+        self.assertTrue(is_local("http://127.0.0.1:8188"))
+        self.assertTrue(is_local("http://localhost:8188"))
+        self.assertFalse(is_local("https://x-8188.proxy.runpod.net"))
+        self.assertFalse(is_local(None))
 
 
 if __name__ == "__main__":

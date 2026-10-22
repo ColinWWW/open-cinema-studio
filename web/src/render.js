@@ -2,7 +2,8 @@
 // which runs our core-node LTX-2.5 workflow through the Comfy SDK) and show the result next to the
 // playblast. The dev server proxies /api/render, /api/look and /api/health to it; a page served from
 // elsewhere (GitHub Pages) calls the server at the URL set in the panel (server started with --cors-origin),
-// or renders with the visitor's own Comfy API key and no server at all (cloud.js, docs/LIVE_RENDER.md).
+// or on this computer (`python -m server.local`, at LOCAL_SERVER), or renders with the visitor's own Comfy API
+// key and no server at all (cloud.js, docs/LIVE_RENDER.md).
 
 import { cloudLook, cloudRender, comfyClient, loadCloud, normalizeBase, saveCloud } from './cloud.js';
 import { PROMPT_IDEAS, variantSeeds } from './prompts.js';
@@ -55,10 +56,11 @@ export function lookForm({ depth, prompt, output, seed, strength }) {
 const SERVER_KEY = 'ocs.renderServer';
 const TARGET_KEY = 'ocs.renderTarget';
 
-/** Where renders run: 'server' (our render server) or 'cloud' (Comfy API with the visitor's key). */
+/** Where renders run: 'server' (a render server URL), 'local' (this computer) or 'cloud' (Comfy API with the visitor's key). */
 export function loadTarget(storage = globalThis.localStorage) {
   try {
-    return storage?.getItem(TARGET_KEY) === 'cloud' ? 'cloud' : 'server';
+    const t = storage?.getItem(TARGET_KEY);
+    return t === 'cloud' || t === 'local' ? t : 'server';
   } catch {
     return 'server';
   }
@@ -66,11 +68,19 @@ export function loadTarget(storage = globalThis.localStorage) {
 
 export function saveTarget(target, storage = globalThis.localStorage) {
   try {
-    if (target === 'cloud') storage.setItem(TARGET_KEY, 'cloud');
+    if (target === 'cloud' || target === 'local') storage.setItem(TARGET_KEY, target);
     else storage.removeItem(TARGET_KEY);
   } catch {
     // blocked storage: the choice lasts for this page view
   }
+}
+
+/** Where `python -m server.local` serves (server/local.py). */
+export const LOCAL_SERVER = 'http://127.0.0.1:8190';
+
+/** The render server for 'This computer': the dev server forwards /api there itself, so it stays same-origin. */
+export function localServer({ proxied = false } = {}) {
+  return proxied ? '' : LOCAL_SERVER;
 }
 
 /** Clean up a typed server URL: '' = same origin; adds http:// if missing; drops trailing slashes. Throws if invalid. */
@@ -261,7 +271,8 @@ function buildCloudControls() {
   const target = document.createElement('select');
   target.id = 'render-target';
   target.title = 'Where renders run';
-  target.append(new Option('Render server', 'server'), new Option('Comfy Cloud (your key)', 'cloud'));
+  target.append(new Option('Render server', 'server'), new Option('This computer', 'local'),
+    new Option('Comfy Cloud (your key)', 'cloud'));
   serverRow.prepend(target);
 
   const row = document.createElement('div');
@@ -295,6 +306,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
   const panel = $('render-panel');
   let server = loadServer();
   let target = loadTarget();
+  const url = () => (target === 'local' ? localServer({ proxied }) : server); // where render jobs go
   let cloud = loadCloud(); // {key, base}
   const ui = buildCloudControls();
   let demoMode = false;
@@ -324,9 +336,10 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     $('render-all').textContent = shots < 2 ? 'Render all shots' : `Render all ${shots} shots`;
     $('render-all').title = allBlock || $('render-all').dataset.title;
     if (demoMode) {
-      $('render-hints').textContent = target === 'cloud'
-        ? 'Add your Comfy API key to generate look stills and render your own shot.'
-        : 'Connect a render server (or pick Comfy Cloud with your own key) to generate look stills and render your own shot.';
+      $('render-hints').textContent = {
+        cloud: 'Add your Comfy API key to generate look stills and render your own shot.',
+        local: 'Start the render stack on this computer (needs an NVIDIA GPU, 24 GB recommended) to generate look stills and render your own shot.',
+      }[target] || 'Connect a render server (or pick This computer or Comfy Cloud) to generate look stills and render your own shot.';
       return;
     }
     const hints = [...promptWarnings($('render-prompt').value)];
@@ -337,6 +350,14 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     $('render-hints').textContent = hints.join(' ');
   };
 
+  /** The demo note's "run this" line, for the chosen target. */
+  function demoCommand() {
+    $('render-demo-cmd').textContent = target === 'local' ? 'python -m server.local'
+      : serverCommand(location.origin, { proxied: proxied && !server });
+    $('render-demo-url').textContent = target === 'local'
+      ? '(set it up first: README, "Render on this computer").' : 'and enter its URL above.';
+  }
+
   /** Demo mode swaps the panel's media for the bundled example; leaving it puts the user's own back. */
   function setDemo(on) {
     if (on === demoMode) return;
@@ -344,7 +365,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     $('render-demo').hidden = !on;
     panel.classList.toggle('demo', on);
     if (on) {
-      $('render-demo-cmd').textContent = serverCommand(location.origin, { proxied: proxied && !server });
+      demoCommand();
       const media = [['render-frame0', 'frame0'], ['render-depth', 'depth'], ['render-look-img', 'look'],
         ['render-blast', 'layout'], ['render-result', 'render']];
       for (const [id, key] of media) {
@@ -447,8 +468,8 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
       const { blob, state } = await cloudLook(comfyClient(cloud), params, { onUpdate, signal });
       return { blob, id: state.id.slice(0, 8), seconds: state.seconds };
     }
-    const final = await runJob('look', lookForm(params), { server, signal, onUpdate });
-    return { blob: await fetchBlob(server, final.image_url), id: final.id, seconds: final.seconds };
+    const final = await runJob('look', lookForm(params), { server: url(), signal, onUpdate });
+    return { blob: await fetchBlob(url(), final.image_url), id: final.id, seconds: final.seconds };
   }
 
   /** Stage-1 render on the chosen target: {blob, id, seconds}. `signal` cancels it (see runJob). */
@@ -457,8 +478,8 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
       const { blob, state } = await cloudRender(comfyClient(cloud), params, { onUpdate, signal });
       return { blob, id: state.id.slice(0, 8), seconds: state.seconds };
     }
-    const final = await runRender(renderForm(params), { server, signal, onUpdate });
-    return { blob: await fetchBlob(server, final.video_url), id: final.id, seconds: final.seconds };
+    const final = await runRender(renderForm(params), { server: url(), signal, onUpdate });
+    return { blob: await fetchBlob(url(), final.video_url), id: final.id, seconds: final.seconds };
   }
 
   /** Comfy target: a free call (one page of past jobs) proves the key and the route. */
@@ -492,8 +513,9 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
     target = t;
     ui.target.value = t;
     saveTarget(t);
-    for (const el of [...ui.serverRow.children].filter((c) => c !== ui.target)) el.hidden = t === 'cloud';
+    for (const el of [...ui.serverRow.children].filter((c) => c !== ui.target)) el.hidden = t !== 'server';
     ui.row.hidden = ui.note.hidden = t !== 'cloud';
+    if (demoMode) demoCommand();
     if (!panel.hidden) checkTarget();
     refreshHints();
   }
@@ -501,16 +523,18 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
   async function checkServer() {
     const mine = ++check;
     const el = $('render-server');
-    el.textContent = 'Checking the render server…';
+    const local = target === 'local';
+    el.textContent = local ? 'Looking for the render stack on this computer…' : 'Checking the render server…';
     el.classList.remove('bad');
     try {
-      const h = await checkHealth(server);
+      const h = await checkHealth(url());
       if (mine !== check) return;
-      el.textContent = `Render server: ${h.target}`;
+      el.textContent = `${local ? 'This computer' : 'Render server'}: ${h.target}`;
       setDemo(false);
     } catch (err) {
       if (mine !== check) return;
-      el.textContent = server ? `${server} not reachable (${err.message}).` : 'No render server on this page’s origin.';
+      if (local) el.textContent = `Nothing running on this computer (${LOCAL_SERVER}). Start it with python -m server.local.`;
+      else el.textContent = server ? `${server} not reachable (${err.message}).` : 'No render server on this page’s origin.';
       el.classList.add('bad');
       setDemo(true);
     }
@@ -636,7 +660,7 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
       if (block) throw new Error(block);
       const runSeed = seed(); // every shot uses the seed the run began with, even if the field is edited meanwhile
       const ids = await renderShots(n, {
-        prompt, seed: runSeed, server, signal, onUpdate,
+        prompt, seed: runSeed, server: url(), signal, onUpdate,
         prepare: async (i) => {
           const stem = showShot(i);
           const { depth, mp4 } = await currentBlast(status);
@@ -649,11 +673,12 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
         },
       });
       status.textContent = 'Cutting the shots together…';
-      const [seq, layout] = await Promise.all([stitchShots(ids, { server }), stitchShots(ids, { server, clip: 'layout' })]);
+      const at = url();
+      const [seq, layout] = await Promise.all([stitchShots(ids, { server: at }), stitchShots(ids, { server: at, clip: 'layout' })]);
       const name = (getScene().name || 'scene').replace(/[^\w.-]+/g, '_');
-      rendered = await fetchBlob(server, seq.video_url);
+      rendered = await fetchBlob(at, seq.video_url);
       showResult(rendered, `${name}_sequence_${seq.id}.mp4`, 'render-download', 'render-result', 'Download sequence');
-      showResult(await fetchBlob(server, layout.video_url), `${name}_layout_sequence_${layout.id}.mp4`,
+      showResult(await fetchBlob(at, layout.video_url), `${name}_layout_sequence_${layout.id}.mp4`,
         'render-download-layout', 'render-blast', 'Download layout sequence');
       blast = null; // the playblast player now shows the layout sequence
       status.textContent = `Sequence done: ${n} shots, ${seq.frames} frames (${(seq.frames / 24).toFixed(1)} s).`;

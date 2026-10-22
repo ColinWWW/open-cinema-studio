@@ -66,9 +66,11 @@ camera, and **Export playblast**, all in your browser. **Render…** needs a ren
 behind it; when none answers, the panel shows a **Demo**: the bundled plaza example (layout clip, its
 depth, the look still generated from it and the LTX-2.5 render, all real A40 outputs from `examples/`).
 
-To render your own shots from the live page, start the render server (setup and Comfy targets in
-[Render](#render-comfy-sdk)) so that the page may call it, then paste its URL (`http://127.0.0.1:8190`)
-into **Render server URL**. Chrome may ask to let the page reach devices on your local network: allow it.
+To render your own shots from the live page, either pick **This computer** in the Render panel and run the
+whole stack on your own NVIDIA GPU ([Render on this computer](#render-on-this-computer)), or start the render
+server against any Comfy target (setup in [Render](#render-comfy-sdk)) so that the page may call it, then paste
+its URL (`http://127.0.0.1:8190`) into **Render server URL**. Chrome may ask to let the page reach devices on
+your local network: allow it.
 
 ```bash
 python -m server.app --cors-origin https://colinwww.github.io     # + --comfy-url for your own ComfyUI
@@ -272,6 +274,47 @@ python scripts/make_test_layout.py --move dolly_in -o examples/layout_dolly_in.m
 ```
 
 Moves: `dolly_in`, `orbit`, `crane_up`, `truck`.
+
+## Render on this computer
+
+Everything runs on your own machine: ComfyUI, comfy-api-proxy and the render server, started together by
+`python -m server.local`. In the app, **Render…** → **This computer**.
+
+| Your GPU (NVIDIA) | What runs |
+|---|---|
+| 24 GB+ (RTX 3090, 4090, A5000…) | Everything. Expect about 3–5 minutes per 65-frame shot on a 4090 (an A40 takes about 3) |
+| 16–24 GB | Video renders in ComfyUI's `--lowvram` mode (picked automatically): weights stream from RAM, so slower |
+| under 16 GB | Look stills only, slowly. Render the video on a [GPU pod](#gpu-setup-runpod) or Comfy Cloud |
+| none, or a Mac | Nothing to render on; use a pod or Comfy Cloud |
+
+Also: 64 GB of RAM recommended (32 GB works, with slow model swaps), about 80 GB of free disk for the
+models, and a Hugging Face Read token with the terms accepted on both gated LTX repos ([below](#models-and-licenses)).
+The timings above beyond the A40 are estimates; `python -m server.doctor --local` tells you where your machine
+stands before you download anything.
+
+**Set up once** (installs ComfyUI into `./ComfyUI`, a venv in `./.venv` with PyTorch for CUDA 12.8, and
+the ~70 GB of models; safe to re-run, downloads resume):
+
+```bash
+bash scripts/setup_local.sh                                             # Linux
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_local.ps1        # Windows
+```
+
+**Then, each time:**
+
+```bash
+.venv/bin/python -m server.local            # Windows: .venv\Scripts\python -m server.local
+```
+
+It checks the GPU, starts ComfyUI (with `--lowvram` under 24 GB), waits for it, warns about any missing
+model file, then starts the proxy and the render server on `http://127.0.0.1:8190`. It lets in the live page
+and the dev server. Ctrl+C stops all three; logs are in `server/logs/`. Already run ComfyUI yourself? Use
+`--comfyui-url http://127.0.0.1:8188`, or `--comfyui-dir` for a checkout somewhere else. No GPU at all?
+`python -m server.local --mock` starts the stand-in ComfyUI instead, so you can try the whole panel (the
+"renders" are copies of the playblast).
 
 ## GPU setup (RunPod)
 

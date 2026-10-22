@@ -19,16 +19,17 @@ M="$COMFY_DIR/models"
 echo "ComfyUI: $COMFY_DIR"
 
 echo "== Disk"
-df -h /workspace
-size_gb=$(df -BG --output=size /workspace | tail -1 | tr -dc 0-9)
+mkdir -p "$M"
+df -h "$M"
+size_gb=$(df -BG --output=size "$M" | tail -1 | tr -dc 0-9)
 if (( size_gb < 80 )); then
-  echo "!! /workspace is only ${size_gb}G; the models need ~70G (LTX ~42G + look still ~28G) plus ComfyUI."
+  echo "!! The disk holding $M is only ${size_gb}G; the models need ~70G (LTX ~42G + look still ~28G) plus ComfyUI."
   echo "   If the volume shows ~10G, the 100G resize didn't apply: rm -rf /workspace/runpod-slim, terminate, redeploy."
   exit 1
 fi
 
 echo "== ComfyUI-LTXVideo"
-PY="$( [[ -x "$COMFY_DIR/.venv/bin/python" ]] && echo "$COMFY_DIR/.venv/bin/python" || command -v python3 )"
+PY="${PY:-$( [[ -x "$COMFY_DIR/.venv/bin/python" ]] && echo "$COMFY_DIR/.venv/bin/python" || command -v python3 )}"
 N="$COMFY_DIR/custom_nodes/ComfyUI-LTXVideo"
 if [[ -d "$N" ]]; then git -C "$N" pull --ff-only || true; else git clone --depth 1 https://github.com/Lightricks/ComfyUI-LTXVideo "$N"; fi
 [[ -f "$N/requirements.txt" ]] && "$PY" -m pip install -q -r "$N/requirements.txt"
@@ -58,7 +59,7 @@ for f in "$M"/diffusion_models/ltx-2.5-* "$M"/text_encoders/gemma4-* "$M"/vae/lt
   if [[ ! -s "$f" ]]; then echo "!! empty: $f (repo terms not accepted, or wrong path)"; bad=1; fi
 done
 ls -lh "$M"/diffusion_models "$M"/text_encoders "$M"/vae "$M"/latent_upscale_models "$M"/loras
-df -h /workspace
+df -h "$M"
 (( bad )) && exit 1
 
 COMFY_DIR="$COMFY_DIR" bash "$REPO_DIR/scripts/setup_look_models.sh"   # look still: Z-Image-Turbo + depth ControlNet

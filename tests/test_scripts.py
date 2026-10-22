@@ -178,3 +178,25 @@ def test_three_looks_commands_and_grid():
     f = looks.grid_filter(480)
     assert "xstack=inputs=4" in f and "palettegen" not in f
     assert "palettegen" in looks.grid_filter(320, fps=12, gif=True)
+
+
+def _sh_models():
+    """(repo, file, folder) for every `get` in setup_pod.sh and setup_look_models.sh."""
+    import re
+
+    found = set()
+    for name in ("setup_pod.sh", "setup_look_models.sh"):
+        text = (ROOT / "scripts" / name).read_text()
+        repos = dict(re.findall(r"^([A-Z])=(\S+)$", text, re.M))
+        for var, path, folder in re.findall(r'^get \$([A-Z]) (\S+) "\$M/([a-z_]+)"', text, re.M):
+            found.add((repos[var], path, folder))
+    return found
+
+
+def test_windows_setup_fetches_the_same_models():
+    import re
+
+    ps1 = (ROOT / "scripts" / "setup_local.ps1").read_text()
+    listed = set(re.findall(r'@\("([^"]+)", "([^"]+)", "([a-z_]+)", \$(?:true|false)\)', ps1))
+    assert len(_sh_models()) == 10
+    assert listed == _sh_models()
