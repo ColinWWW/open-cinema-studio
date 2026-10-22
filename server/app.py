@@ -20,6 +20,7 @@ Routes (the Vite dev server proxies them here):
 
 A page served from another origin (e.g. GitHub Pages) can call the server when it's started with
 --cors-origin https://colinwww.github.io: CORS headers (and preflight answers) go to that origin only.
+Give --cors-origin more than once to let several pages in (server.local does: the live page and the dev server).
 
 Jobs (renders and looks) run one at a time (one GPU), in submission order. Files go to server/renders/<id>/.
 Only the newest --keep-jobs finished jobs (default 200) are kept, with their folders; queued and running jobs,
@@ -342,12 +343,14 @@ def check_origin(origin):
     return origin
 
 
-def cors_middleware(origin):
-    """Let pages from `origin` (one origin, no wildcard) call the API, including preflight requests."""
+def cors_middleware(origins):
+    """Let pages from `origins` (exact origins, no wildcard) call the API, including preflight requests."""
+    origins = {origins} if isinstance(origins, str) else set(origins)
 
     @web.middleware
     async def cors(request, handler):
-        if request.headers.get("Origin") != origin:
+        origin = request.headers.get("Origin")
+        if origin not in origins:
             resp = await handler(request)
             resp.headers.setdefault("Vary", "Origin")
             return resp
@@ -376,7 +379,9 @@ def cors_middleware(origin):
 
 
 def make_app(client, renders_dir=RENDERS, cors_origin=None, keep_jobs=KEEP_JOBS):
-    middlewares = [cors_middleware(check_origin(cors_origin))] if cors_origin else []
+    """`cors_origin`: one origin or a list of them (None: same origin only)."""
+    origins = [cors_origin] if isinstance(cors_origin, str) else list(cors_origin or [])
+    middlewares = [cors_middleware([check_origin(o) for o in origins])] if origins else []
     app = web.Application(client_max_size=MAX_UPLOAD, middlewares=middlewares)
     app[SERVICE] = RenderService(client, renders_dir, keep_jobs)
     app.add_routes([
@@ -397,7 +402,8 @@ def main():
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8190)))
     ap.add_argument("--host", default="127.0.0.1", help="interface to listen on (0.0.0.0 on a pod)")
     ap.add_argument("--comfy-url", help="sets COMFY_BASE_URL (default: Comfy Cloud, or the env var)")
-    ap.add_argument("--cors-origin", help="let a page on this origin call the server, e.g. https://colinwww.github.io")
+    ap.add_argument("--cors-origin", action="append",
+                    help="let a page on this origin call the server, e.g. https://colinwww.github.io (repeatable)")
     ap.add_argument("--keep-jobs", type=int, default=KEEP_JOBS,
                     help=f"finished jobs (and server/renders/<id>/ folders) to keep, newest first; 0 keeps all "
                          f"(default {KEEP_JOBS})")
@@ -406,7 +412,7 @@ def main():
         ap.error("--keep-jobs must be 0 or more")
     if args.cors_origin:
         try:
-            args.cors_origin = check_origin(args.cors_origin)
+            args.cors_origin = [check_origin(o) for o in args.cors_origin]
         except ValueError as e:
             ap.error(str(e))
     if args.comfy_url:
@@ -416,7 +422,7 @@ def main():
         client = tolerate_head_rewrites(AsyncComfy(timeout=120.0))
         app = make_app(client, cors_origin=args.cors_origin, keep_jobs=args.keep_jobs)
         app.on_cleanup.append(lambda _: client.aclose())
-        cors = f" (CORS: {args.cors_origin})" if args.cors_origin else ""
+        cors = f" (CORS: {', '.join(args.cors_origin)})" if args.cors_origin else ""
         print(f"render server on http://{args.host}:{args.port} -> {client!r}{cors}")
         return app
 

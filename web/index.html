@@ -63,6 +63,10 @@
       <button id="save-json" title="Download the scene as JSON">Save</button>
       <label class="file-btn" title="Load a scene JSON">Load<input id="load-json" class="visually-hidden" type="file" accept=".json,application/json" /></label>
       <button id="share-link" title="Copy a link that opens this scene">Share link</button>
+      <span class="undo-redo" role="group" aria-label="Undo and redo">
+        <button id="undo" aria-label="Undo" title="Undo (Ctrl+Z, ⌘Z on a Mac)" disabled>↶</button>
+        <button id="redo" aria-label="Redo" title="Redo (Ctrl+Shift+Z or Ctrl+Y, ⇧⌘Z on a Mac)" disabled>↷</button>
+      </span>
       <span class="spacer"></span>
       <label>Size <select id="resolution"></select></label>
       <label>Frames <select id="frames"></select></label>
@@ -89,7 +93,7 @@
         layout clip, its depth, the look still generated from that depth, and the LTX-2.5 render.
         To render your own shots, run <code id="render-demo-cmd">python -m server.app</code> from
         <a href="https://github.com/ColinWWW/open-cinema-studio#try-it" target="_blank" rel="noopener">the repo</a>
-        and enter its URL above.
+        <span id="render-demo-url">and enter its URL above.</span>
       </div>
       <div class="render-inputs">
         <div class="render-look">

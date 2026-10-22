@@ -29,3 +29,8 @@ server/renders/
 # Playwright smoke test output
 web/test-results/
 web/playwright-report/
+
+# server.local logs
+server/logs/
+# ComfyUI checkout made by scripts/setup_local.*
+/ComfyUI/

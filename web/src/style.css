@@ -33,6 +33,11 @@ header select { max-width: 150px; }
   header label select { font-size: 13px; color: var(--text); }
 }
 .spacer { flex: 1; }
+/* ↶ ↷: one pair of buttons, joined. */
+.undo-redo { display: inline-flex; }
+.undo-redo button { padding: 4px 8px; line-height: 1; font-size: 15px; }
+.undo-redo button:first-child { border-radius: 6px 0 0 6px; }
+.undo-redo button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
 .muted { color: var(--muted); font-weight: normal; }
 
 button, select, input, .file-btn {
@@ -111,6 +116,7 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
 .render-server-row input { flex: 1; min-width: 0; font: inherit; color: var(--text); background: #2d3137; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
 #render-demo { font-size: 12px; line-height: 1.5; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 6px; }
 #render-demo[hidden] { display: none; }
+#render-cloud-row[hidden], #render-cloud-note[hidden] { display: none; } /* .render-row's flex would show them */
 #render-demo strong { color: var(--accent); margin-right: 4px; }
 #render-demo code { user-select: all; background: #2d3137; padding: 1px 4px; border-radius: 4px; }
 #render-demo a { color: var(--accent); }

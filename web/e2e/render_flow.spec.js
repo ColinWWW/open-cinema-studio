@@ -184,6 +184,19 @@ test('Cancel mid-run stops Render all and leaves no job running', async ({ reque
   await expect(page.locator('#render-all')).toBeEnabled();
 });
 
+test('This computer: hides the URL, finds the stack and makes a look still there', async () => {
+  // Behind the dev server's /api proxy, This computer stays same-origin (localServer), so it reaches this stack.
+  await page.locator('#render-target').selectOption('local');
+  await expect(page.locator('#render-server-url')).toBeHidden();
+  await expect(page.locator('#render-server')).toHaveText(/^This computer: /);
+  const before = jobs.length;
+  await page.locator('#render-generate').click();
+  await expect(status()).toHaveText(/^Look still ready/, { timeout: 60_000 });
+  expect(jobs.slice(before).map((j) => j.kind)).toEqual(['look']);
+  await page.locator('#render-target').selectOption('server'); // back to how the earlier steps left it
+  await expect(page.locator('#render-server-url')).toBeVisible();
+});
+
 test('no page errors along the way', () => {
   expect(errors).toEqual([]);
 });

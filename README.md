@@ -19,13 +19,17 @@ follows that camera move and layout. Real A40 output, stage 1, from <code>exampl
 
 ## 60 seconds
 
-- **What it does:** you block out a shot in the browser (grey boxes and a keyed camera path), add one prompt,
-  and get back a cinematic clip that follows that exact camera move and layout, rendered by LTX-2.5 in ComfyUI.
-- **Why it's different:** you set the camera and the layout; the model only paints. The layout clip and its
+- **What it does:** block a person walking, get a person walking. You block out a shot in the browser (grey
+  boxes and people, keyed to move if you like, and a keyed camera path), add one prompt, and get back a cinematic
+  clip that follows that exact camera move, layout and walk, rendered by LTX-2.5 in ComfyUI.
+- **Why it's different:** you set the camera, the layout and how the stand-ins move; the model only paints. The layout clip and its
   depth drive both the look still (Z-Image-Turbo + depth ControlNet) and the clip (LTX-2.5 + the Layout-to-Render
   IC-LoRA), so the render lines up box for box instead of reinterpreting your shot. Open weights only.
+- **See it:** a [keyed person walking across the plaza](#blocking-tool) ([`walk.gif`](docs/media/walk.gif)) and
+  [one layout with four camera moves in four places](#examples) ([`four_moves.gif`](docs/media/four_moves.gif)).
 - **How to try it:** open the [live page](https://colinwww.github.io/open-cinema-studio/) (Chrome or Edge): it
-  replays a real A40 render on first visit, and **Render…** takes a render server URL or your own Comfy key.
+  replays a real A40 render on first visit, **Share link** copies a link that opens your scene, and
+  **Render…** takes a render server URL or your own Comfy key.
   No GPU? Run the whole chain locally against the [stand-in ComfyUI](#render-comfy-sdk).
 
 <p align="center">
@@ -47,7 +51,9 @@ Single A40 runs on Oct 21; your times will vary.
 > layout's own depth, so it lines up box for box, and the stage-1 video render from it keeps both the look and the
 > layout (see [Examples](#examples)). Stage 2 (1920×1088: an x2 latent upscale and 3 refine steps) runs on the
 > A40 too: 97 frames in about 6 minutes, and it holds the layout at full resolution. Stage 1 also handles
-> 121 frames (5 s) in about 4 minutes. Plan, specs and budget: [docs/PLAN.md](docs/PLAN.md).
+> 121 frames (5 s) in about 4 minutes. Moving stand-ins render too: a person keyed to walk across the plaza
+> comes back as a woman walking the same path under an orbit (97 frames). Plan, specs and budget:
+> [docs/PLAN.md](docs/PLAN.md).
 
 ## Try it
 
@@ -60,9 +66,11 @@ camera, and **Export playblast**, all in your browser. **Render…** needs a ren
 behind it; when none answers, the panel shows a **Demo**: the bundled plaza example (layout clip, its
 depth, the look still generated from it and the LTX-2.5 render, all real A40 outputs from `examples/`).
 
-To render your own shots from the live page, start the render server (setup and Comfy targets in
-[Render](#render-comfy-sdk)) so that the page may call it, then paste its URL (`http://127.0.0.1:8190`)
-into **Render server URL**. Chrome may ask to let the page reach devices on your local network: allow it.
+To render your own shots from the live page, either pick **This computer** in the Render panel and run the
+whole stack on your own NVIDIA GPU ([Render on this computer](#render-on-this-computer)), or start the render
+server against any Comfy target (setup in [Render](#render-comfy-sdk)) so that the page may call it, then paste
+its URL (`http://127.0.0.1:8190`) into **Render server URL**. Chrome may ask to let the page reach devices on
+your local network: allow it.
 
 ```bash
 python -m server.app --cors-origin https://colinwww.github.io     # + --comfy-url for your own ComfyUI
@@ -89,8 +97,9 @@ grey layout inset (<code>scripts/four_moves.py</code>). Clips:
 <a href="examples/stage1_tokyo_truck_a40.mp4">Tokyo truck</a>, <a href="examples/stage1_warehouse_dolly_in_a40.mp4">warehouse dolly in</a>.</sub></p>
 
 - Render from a reference photo instead ([`look_plaza.jpg`](examples/look_plaza.jpg)): [contact sheet](examples/stage1_core_plaza_frames.png)
-- A four-shot sequence from **Render all shots** (dolly in, orbit right, crane up, truck right, cut together):
-  [`sequence_plaza_4shots_a40.mp4`](examples/sequence_plaza_4shots_a40.mp4), layout cut
+- A four-shot sequence, made the way **Render all shots** makes one (dolly in, orbit right, crane up, truck right;
+  a look still per shot from the day prompt, seed 2024, then the render; cut together), on an H100 in about 46 s a
+  shot once warm: [`sequence_plaza_4shots_h100.mp4`](examples/sequence_plaza_4shots_h100.mp4), layout cut
   [`sequence_plaza_4shots_layout.mp4`](examples/sequence_plaza_4shots_layout.mp4)
 - Stage 2 at 1920×1088, 97 frames: [`two_stage_plaza_1920_a40.mp4`](examples/two_stage_plaza_1920_a40.mp4)
   (look still [`look_gen_plaza_1920_a40.png`](examples/look_gen_plaza_1920_a40.png))
@@ -103,6 +112,11 @@ grey layout inset (<code>scripts/four_moves.py</code>). Clips:
   [`layout_demo_scene.mp4`](examples/layout_demo_scene.mp4), look still
   [`look_demo_scene_a40.png`](examples/look_demo_scene_a40.png) and render
   [`stage1_demo_scene_a40.mp4`](examples/stage1_demo_scene_a40.mp4)
+- A crowd: ten person stand-ins keyed to dance round a ring in a club, under a high push-in
+  ([`club_scene.json`](examples/club_scene.json)), layout [`layout_club_ring.mp4`](examples/layout_club_ring.mp4),
+  look still [`look_club_ring_a40.png`](examples/look_club_ring_a40.png) and render
+  [`stage1_club_ring_a40.mp4`](examples/stage1_club_ring_a40.mp4). With this many people the look still needs
+  `--strength 0.65`: at the default 1.0 the capsules come back as glowing pills, not people.
 
 A look still that names something the layout doesn't have (a clock tower where the layout has sky) puts it
 there anyway, and the render follows the still rather than the layout. The same goes for leaving the sky
@@ -260,6 +274,47 @@ python scripts/make_test_layout.py --move dolly_in -o examples/layout_dolly_in.m
 ```
 
 Moves: `dolly_in`, `orbit`, `crane_up`, `truck`.
+
+## Render on this computer
+
+Everything runs on your own machine: ComfyUI, comfy-api-proxy and the render server, started together by
+`python -m server.local`. In the app, **Render…** → **This computer**.
+
+| Your GPU (NVIDIA) | What runs |
+|---|---|
+| 24 GB+ (RTX 3090, 4090, A5000…) | Everything. Expect about 3–5 minutes per 65-frame shot on a 4090 (an A40 takes about 3) |
+| 16–24 GB | Video renders in ComfyUI's `--lowvram` mode (picked automatically): weights stream from RAM, so slower |
+| under 16 GB | Look stills only, slowly. Render the video on a [GPU pod](#gpu-setup-runpod) or Comfy Cloud |
+| none, or a Mac | Nothing to render on; use a pod or Comfy Cloud |
+
+Also: 64 GB of RAM recommended (32 GB works, with slow model swaps), about 80 GB of free disk for the
+models, and a Hugging Face Read token with the terms accepted on both gated LTX repos ([below](#models-and-licenses)).
+The timings above beyond the A40 are estimates; `python -m server.doctor --local` tells you where your machine
+stands before you download anything.
+
+**Set up once** (installs ComfyUI into `./ComfyUI`, a venv in `./.venv` with PyTorch for CUDA 12.8, and
+the ~70 GB of models; safe to re-run, downloads resume):
+
+```bash
+bash scripts/setup_local.sh                                             # Linux
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_local.ps1        # Windows
+```
+
+**Then, each time:**
+
+```bash
+.venv/bin/python -m server.local            # Windows: .venv\Scripts\python -m server.local
+```
+
+It checks the GPU, starts ComfyUI (with `--lowvram` under 24 GB), waits for it, warns about any missing
+model file, then starts the proxy and the render server on `http://127.0.0.1:8190`. It lets in the live page
+and the dev server. Ctrl+C stops all three; logs are in `server/logs/`. Already run ComfyUI yourself? Use
+`--comfyui-url http://127.0.0.1:8188`, or `--comfyui-dir` for a checkout somewhere else. No GPU at all?
+`python -m server.local --mock` starts the stand-in ComfyUI instead, so you can try the whole panel (the
+"renders" are copies of the playblast).
 
 ## GPU setup (RunPod)
 

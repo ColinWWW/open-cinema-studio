@@ -330,3 +330,19 @@ test('describeState uses the server-side elapsed time, not this browser\'s clock
   // Comfy Cloud states carry no elapsed: fall back to created
   assert.match(describeState({ status: 'running', stage: 'uploading', created: Date.now() / 1000 - 5 }), /\(5s\)$/);
 });
+
+test('This computer: the target is remembered, and its server is the local stack (same origin behind the dev proxy)', async () => {
+  const { LOCAL_SERVER, loadTarget, localServer, saveTarget } = await import('../src/render.js');
+  const store = new Map();
+  const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
+  assert.equal(loadTarget(storage), 'server');
+  saveTarget('local', storage);
+  assert.equal(loadTarget(storage), 'local');
+  saveTarget('server', storage);
+  assert.equal(loadTarget(storage), 'server');
+  store.set('ocs.renderTarget', 'nonsense');
+  assert.equal(loadTarget(storage), 'server');
+  assert.equal(LOCAL_SERVER, 'http://127.0.0.1:8190');
+  assert.equal(localServer(), LOCAL_SERVER);
+  assert.equal(localServer({ proxied: true }), '');
+});

@@ -212,7 +212,61 @@ async function main() {
     await sleep(500);
     end();
 
-    // 0:30 Playblast: encode the layout clip, frame 0 and depth in the browser. It needs an H.264
+    // 0:28 Stand-ins can move: select the person, ◆ Key move, last frame, move it in the inspector, play.
+    begin('walk');
+    const frameSlider = page.locator('#frame');
+    await moveTo(frameSlider, { dx: 0.01 });
+    await sleep(250);
+    await frameSlider.click({ position: { x: 2, y: 4 } }); // frame 0
+    await sleep(500);
+    // Click the person where the shot camera sees it (its middle, 0.9 m up).
+    const at = await page.evaluate(() => {
+      const { scene, world } = window.ocs;
+      const person = [...scene.objects].reverse().find((o) => o.type === 'person');
+      const mesh = world.meshes.get(person.id);
+      const p = mesh.position.clone();
+      p.y += 0.9;
+      p.project(world.shotCam);
+      const rect = document.getElementById('view').getBoundingClientRect();
+      const aspect = scene.output.width / scene.output.height;
+      let w = rect.width;
+      let h = w / aspect;
+      if (h > rect.height) {
+        h = rect.height;
+        w = h * aspect;
+      }
+      const x0 = rect.left + (rect.width - w) / 2;
+      const y0 = rect.top + (rect.height - h) / 2;
+      return { x: x0 + ((p.x + 1) / 2) * w, y: y0 + ((1 - p.y) / 2) * h };
+    });
+    await moveTo(at);
+    await sleep(300);
+    await page.mouse.down();
+    await sleep(90);
+    await page.mouse.up();
+    await page.locator('#inspector').waitFor({ state: 'visible' });
+    await sleep(700);
+    await click('#obj-key', 1000); // keyed at frame 0 and the last frame
+    await moveTo(frameSlider, { dx: 0.99 });
+    await sleep(250);
+    const sliderBox = await frameSlider.boundingBox();
+    await frameSlider.click({ position: { x: sliderBox.width - 2, y: 4 } }); // the last frame
+    await sleep(600);
+    // across the plaza, behind the box, to the kiosk
+    await typeInto('[data-field="position"][data-i="0"]', -2.6);
+    await typeInto('[data-field="position"][data-i="2"]', 6.6, 1200);
+    await blur();
+    await page.keyboard.press('Escape');
+    await frameSlider.click({ position: { x: 2, y: 4 } });
+    await moveTo({ x: W * 0.62, y: H * 0.55 });
+    await blur();
+    await page.keyboard.press('Space');
+    await sleep(4500); // the walk plays about twice
+    await page.keyboard.press('Space');
+    await sleep(500);
+    end();
+
+    // 0:43 Playblast: encode the layout clip, frame 0 and depth in the browser. It needs an H.264
     // encoder (WebCodecs), which Chrome has and Playwright's own Chromium doesn't; assemble.py then
     // shows the bundled plaza playblast instead.
     const canEncode = await page.evaluate(async () =>
@@ -233,7 +287,7 @@ async function main() {
       }
     } else console.warn('  playblast: skipped, this browser has no H.264 encoder (use PW_CHANNEL=chrome)');
 
-    // 0:40 Render panel: with no server it opens on the bundled A40 example (demo mode).
+    // 0:51 Render panel: with no server it opens on the bundled A40 example (demo mode).
     begin('render');
     await click('#render-open', 400);
     await page.locator('#render-demo').waitFor({ state: 'visible', timeout: 15_000 });

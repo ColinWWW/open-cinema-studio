@@ -8,6 +8,7 @@ import { editObjectPose, isAnimated, keyObject, objectPath, objectPoseAt, offset
 import { PRESETS, newId, normalizeScene } from './presets.js';
 import { demoUrls } from './demo.js';
 import { confirmDialog } from './dialog.js';
+import { History } from './history.js';
 import { initRenderPanel, loadServer } from './render.js';
 import { initReplay, loadSeen, shouldAutoOpen } from './replay.js';
 import { decodeScene, hasSharedScene, shareLink, showToast } from './share.js';
@@ -84,8 +85,19 @@ function loadSaved() {
     return null;
   }
 }
+const undoHistory = new History(scene); // undo / redo (history.js): every save() is a step
+let editSeq = 0; // bumped when a gizmo drag starts or a field gets focus, so each drag or field is one step
+const editGroup = (what) => `${what}:${editSeq}`;
+window.addEventListener('focusin', () => editSeq++);
+
+/** Persist the scene and make the edit an undo step (`group`: merge with the step before when it's the same). */
+function save(group = null) {
+  undoHistory.record(scene, group);
+  refreshUndo();
+  persist();
+}
 let saveTimer = 0;
-function save() {
+function persist() {
   edited = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
@@ -95,6 +107,36 @@ function save() {
       /* private mode or full: the scene still works, it just won't survive a reload */
     }
   }, 300);
+}
+
+// ---------- undo / redo ----------
+/** Put an undo snapshot back, keeping the frame and the selection when they still exist. */
+function restore(snap) {
+  scene = snap;
+  frame = Math.min(frame, lastFrame());
+  world.syncObjects(scene.objects, frame);
+  world.setFog(scene.fog);
+  select(scene.objects.some((o) => o.id === selectedId) ? selectedId : null);
+  if (pilot) enterPilotPose();
+  refreshAll();
+  refreshUndo();
+  persist();
+}
+function undo() {
+  if (transform.dragging) return; // mid-drag: the drag is the step being made
+  if (!undoHistory.canUndo) return flash('Nothing to undo');
+  restore(undoHistory.undo());
+  flash('Undone (Ctrl+Shift+Z to redo)');
+}
+function redo() {
+  if (transform.dragging) return;
+  if (!undoHistory.canRedo) return flash('Nothing to redo');
+  restore(undoHistory.redo());
+  flash('Redone');
+}
+function refreshUndo() {
+  $('undo').disabled = !undoHistory.canUndo;
+  $('redo').disabled = !undoHistory.canRedo;
 }
 
 // ---------- scene <-> world ----------
@@ -139,8 +181,9 @@ function onTransformChange() {
   obj.scale = mesh.scale.toArray().map((v) => Math.max(0.01, v));
   moveSelected(obj, { position: mesh.position.toArray(), rotation: [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z] });
   refreshInspector();
-  save();
+  save(editGroup('gizmo'));
 }
+transform.addEventListener('mouseDown', () => editSeq++);
 transform.addEventListener('mouseUp', () => world.fitShadow(scene.objects));
 
 function floorPointInView() {
@@ -641,7 +684,7 @@ $('obj-name').addEventListener('input', (e) => {
   if (!obj) return;
   obj.name = e.target.value;
   $('sel-label').textContent = obj.name;
-  save();
+  save(editGroup('obj-name'));
 });
 for (const input of document.querySelectorAll('#inspector [data-field]')) {
   input.addEventListener('input', () => {
@@ -658,7 +701,7 @@ for (const input of document.querySelectorAll('#inspector [data-field]')) {
       moveSelected(obj, pose);
     }
     world.fitShadow(scene.objects);
-    save();
+    save(editGroup(`${input.dataset.field}${input.dataset.i}`));
   });
 }
 $('obj-roty').addEventListener('input', (e) => {
@@ -668,14 +711,14 @@ $('obj-roty').addEventListener('input', (e) => {
   const pose = objectPoseAt(obj, frame);
   pose.rotation[1] = THREE.MathUtils.degToRad(v);
   moveSelected(obj, pose);
-  save();
+  save(editGroup('obj-roty'));
 });
 $('obj-grey').addEventListener('input', (e) => {
   const obj = selected();
   if (!obj) return;
   obj.grey = parseFloat(e.target.value);
   world.applyObject(world.meshes.get(obj.id), obj, frame);
-  save();
+  save(editGroup('obj-grey'));
 });
 $('obj-key').addEventListener('click', keySelected);
 $('obj-key-del').addEventListener('click', unkeySelected);
@@ -694,19 +737,19 @@ $('shot-down').addEventListener('click', () => changeShots((s) => moveShot(s, s.
 $('shot-name').addEventListener('input', (e) => {
   scene.shots[scene.shot].name = e.target.value.trim() || `Shot ${scene.shot + 1}`;
   refreshShots();
-  save();
+  save(editGroup('shot-name'));
 });
 for (const [key, label] of Object.entries(MOVES)) $('cam-move').add(new Option(label, key));
 $('cam-move-apply').addEventListener('click', () => applyMove($('cam-move').value));
 $('cam-fov').addEventListener('input', (e) => {
   const v = parseFloat(e.target.value);
   if (Number.isFinite(v) && v >= 10 && v <= 120) scene.camera.fov = v;
-  save();
+  save(editGroup('cam-fov'));
 });
 $('cam-shift').addEventListener('input', (e) => {
   const v = parseFloat(e.target.value);
   if (Number.isFinite(v) && Math.abs(v) <= 1) scene.camera.lensShift = v;
-  save();
+  save(editGroup('cam-shift'));
 });
 $('cam-ease').addEventListener('change', (e) => {
   scene.camera.ease = e.target.value;
@@ -729,6 +772,19 @@ $('next-key').addEventListener('click', () => jumpKey(1));
 let focusFromPointer = false; // did the focused control get focus from a click (true) or from Tab (false)?
 window.addEventListener('pointerdown', () => (focusFromPointer = true), true);
 window.addEventListener('keydown', (e) => e.key === 'Tab' && (focusFromPointer = false), true);
+
+$('undo').addEventListener('click', undo);
+$('redo').addEventListener('click', redo);
+// Undo keys, apart from the other shortcuts below. Typing in a field keeps the browser's own text undo.
+window.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.target.closest('input, select, textarea, [role=dialog], [role=alertdialog]') || exporting) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' || (k === 'y' && !e.shiftKey)) {
+    e.preventDefault();
+    if (k === 'y' || e.shiftKey) redo();
+    else undo();
+  }
+});
 
 window.addEventListener('keydown', (e) => {
   if (e.target.closest?.('input, select, textarea, [role=dialog], [role=alertdialog]') || exporting) return; // typing and dialogs keep their keys
@@ -868,5 +924,6 @@ window.ocs = {
 world.syncObjects(scene.objects, frame);
 world.setFog(scene.fog);
 refreshAll();
+refreshUndo();
 requestAnimationFrame(tick);
 openSharedScene().catch(() => {});

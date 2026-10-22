@@ -53,6 +53,65 @@ def test_depth_matches_the_web_export():
     assert ours[0, 480] == 0 and ours[-1, 480] > 200  # sky black, near floor bright
 
 
+def _gray_png(path, width, height):
+    import subprocess
+
+    raw = subprocess.run([layout.find_ffmpeg(), "-loglevel", "error", "-i", str(path), "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+                         capture_output=True, check=True).stdout
+    return np.frombuffer(raw, np.uint8).reshape(height, width).astype(int)
+
+
+def _person_x(scene, frame, width=192, height=128):
+    """Mean screen x of the pixels the walking person covers on `frame` (rendered with vs without it)."""
+    eye, target, sc = layout.scene_at(scene, frame)
+    fov = scene["camera"]["fov"]
+    with_person = layout.render(eye, target, width, height, fov, sc)[..., 0]
+    sc["solids"] = [s for s, o in zip(sc["solids"], scene["objects"]) if o["type"] != "person"]
+    without = layout.render(eye, target, width, height, fov, sc)[..., 0]
+    xs = np.nonzero(with_person != without)[1]
+    assert len(xs) > 20, "the person should be in shot"
+    return xs.mean() / width
+
+
+def test_scene_json_person_walks_across_the_frame():
+    # examples/walk_scene.json: the camera orbits left while the person walks the other way (three.js +x),
+    # so in the editor they start right of centre and end up in the left part of the frame
+    scene = layout.load_scene(ROOT / "examples/walk_scene.json")
+    last = scene["output"]["frames"] - 1
+    start, end = _person_x(scene, 0), _person_x(scene, last)
+    assert start > 0.6 and end < 0.2
+
+
+def test_scene_json_depth_matches_the_editor():
+    # the editor's own depth export of the same shot; its person is a 16-sided capsule mesh, ours a true one
+    scene = layout.load_scene(ROOT / "examples/walk_scene.json")
+    eye, target, sc = layout.scene_at(scene, 0)
+    ours = layout.render_depth(eye, target, 960, 576, scene["camera"]["fov"], sc)[..., 0].astype(int)
+    web = _gray_png(ROOT / "examples/layout_plaza_walk_orbit_depth.png", 960, 576)
+    assert np.abs(ours - web).mean() < 1.0
+    assert (np.abs(ours - web) > 16).mean() < 0.005
+
+
+def test_object_pose_follows_keys_like_the_editor():
+    obj = {"position": [0, 0, 0], "rotation": [0, 0, 0], "keys": [
+        {"frame": 10, "position": [0, 0, 0], "rotation": [0, np.radians(170), 0]},
+        {"frame": 20, "position": [4, 0, 2], "rotation": [0, np.radians(-170), 0]},
+    ]}
+    assert layout.object_pose(obj, 0) == ([0, 0, 0], [0, np.radians(170), 0])  # holds before the first key
+    assert layout.object_pose(obj, 30)[0] == [4, 0, 2]  # and after the last
+    pos, rot = layout.object_pose(obj, 15)
+    assert np.allclose(pos, [2, 0, 1])  # linear, not eased
+    assert np.isclose(rot[1], np.radians(180))  # 170 -> -170 turns 20 degrees the short way
+
+
+def test_scene_json_cli(tmp_path):
+    out = tmp_path / "walk.mp4"
+    layout.main(["--scene-json", str(ROOT / "examples/walk_scene.json"), "--width", "128", "--height", "64",
+                 "--frames", "9", "-o", str(out)])
+    assert out.stat().st_size > 0
+    assert _gray_png(tmp_path / "walk_depth.png", 128, 64).max() == 255
+
+
 def test_camera_moves_start_and_end_differ():
     for move in ("dolly_in", "orbit", "crane_up", "truck"):
         assert not np.allclose(layout.camera_path(move, 0.0)[0], layout.camera_path(move, 1.0)[0])
@@ -119,3 +178,25 @@ def test_three_looks_commands_and_grid():
     f = looks.grid_filter(480)
     assert "xstack=inputs=4" in f and "palettegen" not in f
     assert "palettegen" in looks.grid_filter(320, fps=12, gif=True)
+
+
+def _sh_models():
+    """(repo, file, folder) for every `get` in setup_pod.sh and setup_look_models.sh."""
+    import re
+
+    found = set()
+    for name in ("setup_pod.sh", "setup_look_models.sh"):
+        text = (ROOT / "scripts" / name).read_text()
+        repos = dict(re.findall(r"^([A-Z])=(\S+)$", text, re.M))
+        for var, path, folder in re.findall(r'^get \$([A-Z]) (\S+) "\$M/([a-z_]+)"', text, re.M):
+            found.add((repos[var], path, folder))
+    return found
+
+
+def test_windows_setup_fetches_the_same_models():
+    import re
+
+    ps1 = (ROOT / "scripts" / "setup_local.ps1").read_text()
+    listed = set(re.findall(r'@\("([^"]+)", "([^"]+)", "([a-z_]+)", \$(?:true|false)\)', ps1))
+    assert len(_sh_models()) == 10
+    assert listed == _sh_models()
