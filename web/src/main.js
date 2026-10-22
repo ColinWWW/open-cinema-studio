@@ -726,6 +726,10 @@ $('del-key').addEventListener('click', deleteKey);
 $('prev-key').addEventListener('click', () => jumpKey(-1));
 $('next-key').addEventListener('click', () => jumpKey(1));
 
+let focusFromPointer = false; // did the focused control get focus from a click (true) or from Tab (false)?
+window.addEventListener('pointerdown', () => (focusFromPointer = true), true);
+window.addEventListener('keydown', (e) => e.key === 'Tab' && (focusFromPointer = false), true);
+
 window.addEventListener('keydown', (e) => {
   if (e.target.closest?.('input, select, textarea, [role=dialog], [role=alertdialog]') || exporting) return; // typing and dialogs keep their keys
   const k = e.key.toLowerCase();
@@ -743,9 +747,11 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'k' && e.shiftKey) keySelected(); // Shift+K: key the selected stand-in
   else if (k === 'k') keyCamera();
   else if (k === ' ') {
-    // Space presses a focused button or link. Other shortcuts still work there: a button keeps focus after a
-    // mouse click, and W/E/R or Delete shouldn't stop working because of it.
-    if (e.target.closest?.('button, a[href], summary')) return;
+    // Space presses a button or link reached with the keyboard. One that only has focus from a mouse click
+    // still plays: after "Apply move", Space should play the move, not apply it again. (:focus-visible can't
+    // tell: Chrome counts a click as keyboard focus after any key press.) Other shortcuts work on a focused
+    // button either way, so W/E/R or Delete keep working after any click.
+    if (e.target.closest?.('button, a[href], summary') && !focusFromPointer) return;
     e.preventDefault();
     togglePlay();
   } else if (k === ',') setFrame(frame - 1);

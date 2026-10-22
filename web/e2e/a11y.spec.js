@@ -157,6 +157,14 @@ test('keyboard: Space presses a focused button instead of toggling play', async 
   await expect(play).toHaveText('⏸');
   await page.keyboard.press('Space');
   await expect(play).toHaveText('▶');
+
+  // A button clicked with the mouse keeps focus, but Space still plays: "Apply move", then Space plays the move.
+  await page.locator('#cam-move-apply').click();
+  await expect(page.locator('#cam-move-apply')).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(play).toHaveText('⏸');
+  await page.keyboard.press('Space');
+  await expect(play).toHaveText('▶');
 });
 
 test('keyboard: ▶ Demo moves focus into the replay and back out when it closes', async ({ page }) => {
