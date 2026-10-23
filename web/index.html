@@ -228,33 +228,53 @@
             <div class="agent-head">
               <strong>Scene agent</strong>
               <span id="agent-status" class="muted" aria-live="polite"></span>
-              <button id="agent-settings-btn" class="ghost" aria-expanded="false" aria-controls="agent-settings">Settings</button>
               <button id="agent-close" class="ghost" aria-label="Close the scene agent" title="Close (Esc)">✕</button>
+            </div>
+            <!-- Two ways in: a chat app the visitor already uses (no key, src/agent/chat.js), or an API key. -->
+            <div class="agent-modes" role="group" aria-label="How the agent runs">
+              <button id="agent-mode-chat" class="agent-mode" aria-pressed="true">Use your chat app <span class="muted">· no key</span></button>
+              <button id="agent-mode-key" class="agent-mode" aria-pressed="false">Use an API key</button>
+              <button id="agent-settings-btn" class="ghost" aria-expanded="false" aria-controls="agent-settings" hidden>Change key</button>
             </div>
             <div id="agent-settings" hidden>
               <div class="agent-row">
-                <label for="agent-provider">Model provider</label>
-                <select id="agent-provider"></select>
-              </div>
-              <div class="agent-row">
-                <label id="agent-key-label" for="agent-key">Claude API key</label>
-                <input id="agent-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" />
-              </div>
-              <div class="agent-row">
-                <label for="agent-model">Model</label>
-                <input id="agent-model" type="text" spellcheck="false" list="agent-models" placeholder="claude-opus-5-5" />
-                <datalist id="agent-models"></datalist>
-              </div>
-              <div class="agent-row">
-                <label for="agent-base">via</label>
-                <input id="agent-base" type="text" spellcheck="false" placeholder="blank = api.anthropic.com, or your relay's URL" />
-              </div>
-              <div class="agent-row">
+                <input id="agent-key" type="password" autocomplete="off" spellcheck="false" aria-label="API key" placeholder="Paste a Claude, Gemini or OpenAI API key" />
                 <button id="agent-save" class="primary">Save</button>
-                <button id="agent-forget" class="ghost" title="Remove the key from this browser">Forget key</button>
               </div>
-              <p class="hint">Claude, Gemini or ChatGPT, with your own key. It is stored only in this browser (localStorage) and sent only to that provider's API (or the URL above), never to us.
-                Other agents can drive the same scene tools: <a href="https://github.com/ColinWWW/open-cinema-studio/blob/main/docs/AGENTS.md" target="_blank" rel="noopener">docs/AGENTS.md</a>.</p>
+              <p id="agent-key-kind" class="hint" aria-live="polite"></p>
+              <p class="hint">No key? <a id="agent-free-key" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini key</a>, or use your chat app instead.
+                The key stays in this browser (localStorage) and goes only to that provider's API, never to us.</p>
+              <details id="agent-advanced">
+                <summary>Advanced</summary>
+                <div class="agent-row">
+                  <label for="agent-provider">Provider</label>
+                  <select id="agent-provider"></select>
+                </div>
+                <div class="agent-row">
+                  <label for="agent-model">Model</label>
+                  <input id="agent-model" type="text" spellcheck="false" list="agent-models" placeholder="claude-opus-5-5" />
+                  <datalist id="agent-models"></datalist>
+                </div>
+                <div class="agent-row">
+                  <label for="agent-base">via</label>
+                  <input id="agent-base" type="text" spellcheck="false" placeholder="blank = api.anthropic.com, or your relay's URL" />
+                </div>
+                <div class="agent-row">
+                  <button id="agent-forget" class="ghost" title="Remove the key from this browser">Forget key</button>
+                </div>
+                <p class="hint">Other agents can drive the same scene tools: <a href="https://github.com/ColinWWW/open-cinema-studio/blob/main/docs/AGENTS.md" target="_blank" rel="noopener">docs/AGENTS.md</a>.</p>
+              </details>
+            </div>
+            <div id="agent-chat" hidden>
+              <p class="hint">Paste it into <a href="https://claude.ai/new" target="_blank" rel="noopener">Claude</a>, <a href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a> or <a href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini</a>, then paste the whole reply here.</p>
+              <details>
+                <summary>Show the prompt</summary>
+                <textarea id="agent-chat-prompt" rows="4" readonly aria-label="The prompt for your chat app"></textarea>
+              </details>
+              <div class="agent-compose">
+                <textarea id="agent-reply" rows="2" aria-label="The chat app's reply" placeholder="Paste the reply here"></textarea>
+                <button id="agent-build-reply" class="primary">Build</button>
+              </div>
             </div>
             <ol id="agent-log"></ol>
             <div id="agent-result" hidden>

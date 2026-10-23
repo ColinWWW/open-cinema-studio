@@ -44,6 +44,15 @@ export const PROVIDERS = {
 
 export const PROVIDER_IDS = Object.keys(PROVIDERS);
 
+/** The provider a pasted key belongs to, from its shape; '' when it looks like none of them (a relay's token). */
+export function detectProvider(key) {
+  const k = (key || '').trim();
+  if (k.startsWith('sk-ant-')) return 'claude';
+  if (k.startsWith('AIza')) return 'gemini';
+  if (k.startsWith('sk-')) return 'openai';
+  return '';
+}
+
 /** A createMessage for provider `id` ('claude' | 'gemini' | 'openai'). */
 export function createProvider(id, { apiKey, baseURL, model } = {}) {
   const p = Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : null;

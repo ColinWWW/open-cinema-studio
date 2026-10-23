@@ -10,7 +10,7 @@ ways in:
 
 | Way in | For | Where |
 | --- | --- | --- |
-| **Agent panel** in the editor | Typing a brief | **✦ Design with an agent**, bottom left of the view. Runs Claude, Gemini or ChatGPT with your own API key. |
+| **Agent panel** in the editor | Typing a brief | **✦ Design with an agent**, bottom left of the view. **Use your chat app** (no key: copy a prompt, paste the reply back), or Claude, Gemini or ChatGPT with your own API key. |
 | **`window.ocs.agent`** in the page | Browser agents, Playwright, an MCP bridge, your own model | `ocs.agent.tools`, `ocs.agent.call(name, input)` |
 | **`scripts/design-scene.mjs`** | Headless runs, batch jobs, CI | `node web/scripts/design-scene.mjs "brief" -o scene.json` |
 
@@ -99,7 +99,7 @@ with `runTool(scene, name, input)`, and write the scene out as JSON (or a share 
 
 ## The built-in agent: Claude, Gemini or ChatGPT
 
-Pick the model provider in the panel's **Settings** (or with `--provider` in the script). Each provider
+The panel picks the provider from the key you paste (override it under **Advanced**), or use `--provider` in the script. Each provider
 keeps its own key, model and relay URL, and the panel uses the one you saved last. All three get the same
 system prompt, the same tools and the same loop (`web/src/agent/runner.js`). Each provider has a small
 adapter in `web/src/agent/providers/` that translates to and from its own API, using its official SDK.
@@ -120,7 +120,15 @@ the agent builds on your edit rather than overwriting it, and its run splits int
 edit and one after.) Each SDK loads only when its provider
 runs, so the editor doesn't download any of them otherwise.
 
-**Your keys.** The panel asks for your own API key for the provider you pick. Keys are kept only in this
+**Without a key: your chat app.** The panel's default mode copies one prompt (the instructions above, the tools
+as JSON Schema, your brief and the scene as JSON) to paste into Claude.ai, ChatGPT or Gemini. The reply is the
+whole plan as one JSON block, `{"calls": [{"tool", "input"}, …], "summary"}`. Paste it back and the panel replays
+each call through the same tools (`web/src/agent/chat.js`), naming objects instead of using ids, which the chat
+can't see. A call the tools refuse is skipped and marked in the log. It's one exchange, so there's no
+`view_shot` and no second look: describe a change and copy again to refine.
+
+**Your keys.** With **Use an API key**, paste one key: the panel picks the provider from its shape (`sk-ant-`
+Claude, `AIza` Gemini, `sk-` OpenAI), with the provider, model and relay URL under **Advanced**. Keys are kept only in this
 browser (`localStorage`: `ocs.claudeKey`, `ocs.geminiKey`, `ocs.openaiKey`) and sent only to that
 provider's API (`api.anthropic.com`, `generativelanguage.googleapis.com`, `api.openai.com`) or the relay
 URL you set. They never go to this project's servers, the same as the Comfy key (see

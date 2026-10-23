@@ -164,8 +164,10 @@ the **Blocks** and **Plaza** presets reproduce `scripts/make_test_layout.py`'s c
 
 **Design with an agent.** Describe the shot in the panel at the bottom left of the view (*"a dock worker
 beside two containers on a foggy quay, slow dolly in"*). An agent then places the stand-ins, frames and
-moves the camera, checks each shot through its lens, and drafts the render prompt. It uses Claude, Gemini or
-ChatGPT with your own API key, which is kept in your browser, and Ctrl+Z undoes the whole build. Other agents (browser agents,
+moves the camera, checks each shot through its lens, and drafts the render prompt. No key needed: **Use your
+chat app** copies a prompt for Claude.ai, ChatGPT or Gemini (a free account works), and pasting the reply back
+builds the scene. Or paste a Claude, Gemini or OpenAI API key (the panel tells which from its shape; it stays in
+your browser) and the agent works through the shot itself. Ctrl+Z undoes the whole build. Other agents (browser agents,
 Playwright, an MCP bridge, a headless script) drive the same scene tools through `window.ocs.agent` or
 `web/scripts/design-scene.mjs`: see [docs/AGENTS.md](docs/AGENTS.md).
 

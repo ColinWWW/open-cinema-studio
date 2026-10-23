@@ -17,6 +17,9 @@ below applies to them:
   words, so a key pasted into the wrong field is refused).
 - Everything the model sends back (the log, its summary, the drafted prompt) is shown as plain text only.
   The tools validate every input before it touches the scene.
+- **Use your chat app** needs no key and sends nothing anywhere: the prompt goes to the clipboard, and the
+  reply the visitor pastes back is untrusted text. It is parsed as JSON only (never run or rendered as
+  HTML), capped at 200 steps, and each step goes through the same tool validation as a model's tool call.
 
 If one of these keys leaks, revoke it where it was made: the [Claude Console](https://console.anthropic.com),
 [Google AI Studio](https://aistudio.google.com/apikey) or the [OpenAI dashboard](https://platform.openai.com/api-keys).
