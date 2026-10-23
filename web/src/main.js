@@ -11,8 +11,6 @@ import { confirmDialog } from './dialog.js';
 import { History } from './history.js';
 import { initRenderPanel, loadServer } from './render.js';
 import { initReplay, loadSeen, shouldAutoOpen } from './replay.js';
-import { initAgentPanel } from './agent/panel.js';
-import { ToolError, describeScene, runTool, toolDefinitions, viewShotArgs } from './agent/tools.js';
 import { decodeScene, hasSharedScene, shareLink, showToast } from './share.js';
 import { addShot, moveShot, removeShot, rescaleShots, selectShot, shotStem } from './shots.js';
 import { FRAME_COUNTS, RESOLUTIONS } from './spec.js';
@@ -30,7 +28,6 @@ let selectedId = null;
 let pilot = false;
 let playing = false;
 let exporting = false;
-let exportDone = null; // resolves when the running export finishes (agents wait for it before touching the world)
 let renderPanel = null; // {refresh}: set up at the end, once the editor is wired
 
 // ---------- three.js setup ----------
@@ -149,7 +146,7 @@ function refreshUndo() {
 }
 
 // ---------- scene <-> world ----------
-/** Replace the scene (a loaded file, a preset, an agent's edit). Edits sharing a `group` make one undo step. */
+/** Replace the scene (a loaded file or a preset). Edits sharing a `group` make one undo step. */
 function loadScene(next, group = null) {
   frame = 0;
   select(null);
@@ -840,8 +837,6 @@ async function saveToDevServer(name, blob) {
 async function runExport() {
   if (exporting) return null;
   exporting = true;
-  let finished;
-  exportDone = new Promise((resolve) => (finished = resolve));
   playing = false;
   $('play').textContent = '▶';
   const panel = $('export-panel');
@@ -888,8 +883,6 @@ async function runExport() {
     exporting = false;
     world.poseObjects(scene.objects, frame); // the exporter walked the stand-ins through every frame
     $('export').disabled = false;
-    exportDone = null;
-    finished();
   }
 }
 $('export').addEventListener('click', () => runExport().catch(() => {}));
@@ -918,76 +911,6 @@ initReplay({
   autoOpen: !openedShared && shouldAutoOpen({ dev: import.meta.env.DEV, server: loadServer(), seen: loadSeen() }),
 });
 
-// ---------- scene agents (agent/*.js, docs/AGENTS.md) ----------
-/** What shot `i` films at frame `f`, as a JPEG for the view_shot tool. `s` is the live scene (agents edit it in place). */
-function viewShot(s, i, f) {
-  const cam = s.shots[i].camera;
-  const w = 768;
-  const h = Math.round(w / (s.output.width / s.output.height));
-  const target = new THREE.WebGLRenderTarget(w, h);
-  const shotCam = world.shotCam;
-  const saved = { position: shotCam.position.clone(), quaternion: shotCam.quaternion.clone(), fov: shotCam.fov, lensShift: shotCam.lensShift, aspect: shotCam.aspect };
-  try {
-    world.poseObjects(s.objects, f);
-    world.applyShot(cam, poseAt(cam.keys, f, cam.ease), w / h);
-    world.helpers.visible = false;
-    renderer.setRenderTarget(target);
-    renderer.setScissorTest(false);
-    renderer.setClearColor(0x15171a);
-    renderer.clear();
-    renderer.render(world.scene, world.shotCam);
-    const px = new Uint8Array(w * h * 4);
-    renderer.readRenderTargetPixels(target, 0, 0, w, h, px);
-    const out = document.createElement('canvas');
-    out.width = w;
-    out.height = h;
-    const img = new ImageData(w, h);
-    for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4); // GL rows run bottom-up
-    out.getContext('2d').putImageData(img, 0, 0);
-    return { mediaType: 'image/jpeg', data: out.toDataURL('image/jpeg', 0.85).split(',')[1] };
-  } finally {
-    renderer.setRenderTarget(null);
-    world.helpers.visible = true;
-    world.poseObjects(scene.objects, frame);
-    shotCam.position.copy(saved.position); // piloting: the orbit controls own this pose
-    shotCam.quaternion.copy(saved.quaternion);
-    Object.assign(shotCam, { fov: saved.fov, lensShift: saved.lensShift, aspect: saved.aspect });
-    shotCam.updateProjectionMatrix();
-    shotCam.updateMatrixWorld();
-    target.dispose();
-  }
-}
-
-/** Put a prompt in the Render panel's prompt box, and open the panel when `open`. */
-function usePrompt(text, { open = true } = {}) {
-  $('render-prompt').value = text;
-  $('render-prompt').dispatchEvent(new Event('input'));
-  if (open && $('render-panel').hidden) $('render-open').click();
-}
-
-/** An agent's edit: shown without moving the playhead or dropping the selection; edits in one `group` are one undo step. */
-function applyAgentScene(next, group = null) {
-  showScene(normalizeScene(next));
-  save(group);
-}
-/** Resolves once no playblast export is running: it owns the world (helpers, poses) until it finishes. */
-async function afterExport() {
-  while (exportDone) await exportDone;
-}
-
-const agentPanel = initAgentPanel({
-  getScene: () => scene,
-  applyScene: async (next, group) => {
-    await afterExport();
-    applyAgentScene(next, group);
-  },
-  viewShot: async (s, i, f) => {
-    await afterExport();
-    return viewShot(s, i, f);
-  },
-  usePrompt,
-});
-
 // Hook for scripted checks.
 window.ocs = {
   get scene() {
@@ -998,28 +921,6 @@ window.ocs = {
   loadPreset: (key) => loadScene(PRESETS[key].make()),
   setFrame,
   exportPlayblast: runExport,
-  // For any other agent (a browser agent, Playwright, an MCP bridge): the same tools the panel's agent uses.
-  agent: {
-    tools: toolDefinitions({ canView: true }),
-    describe: () => describeScene(scene),
-    /**
-     * Run one tool on the live scene. Throws ToolError (with a message for the agent) on bad input. Each call is
-     * its own undo step unless calls share a `group` (one per agent session, say).
-     */
-    call(name, input = {}, { group = null } = {}) {
-      if (exporting) throw new ToolError('The editor is exporting a playblast; try again when it finishes.');
-      if (name === 'view_shot') {
-        const { shot, frame: f } = viewShotArgs(scene, input);
-        return viewShot(scene, shot, f);
-      }
-      const out = runTool(scene, name, input);
-      if (out.changed) applyAgentScene(out.scene, group);
-      if (out.prompt) usePrompt(out.prompt, { open: false });
-      return out.result;
-    },
-    run: (brief, opts) => agentPanel.run(brief, opts),
-    open: () => agentPanel.open(),
-  },
 };
 
 // ---------- go ----------
