@@ -336,6 +336,23 @@ bash scripts/setup_pod.sh                                                   # ~4
 First accept the terms on both gated LTX repos (see below) and have a Read token ready. The look-still
 models aren't gated; `bash scripts/setup_look_models.sh` fetches just those.
 
+**Render from the live page, with nothing to type on the pod.** Do this once, after the setup above:
+
+1. In the pod's settings (or when you deploy it), expose HTTP port **8190**, and set the **Container Start Command** to:
+   ```bash
+   bash -c "bash /workspace/cinema-studio/scripts/start_pod.sh & exec /start.sh"
+   ```
+   `/start.sh` is the template's own startup (ComfyUI, SSH, Jupyter), so keep it in the command.
+2. From then on, start the pod (on the same network volume) and wait a few minutes. `scripts/start_pod.sh`
+   starts the budget guard, waits for ComfyUI, then starts comfy-api-proxy and the render server. Its log,
+   `/workspace/start_pod.log`, ends with the URL to use.
+3. In the app: **Render…** → paste `https://<pod-id>-8190.proxy.runpod.net` into **Render server URL**.
+
+On a pod that's already running, `bash scripts/start_pod.sh` does the same thing. While the pod runs, anyone
+with that URL can render on it and you pay by the hour, so share it only with people you trust. The budget
+guard terminates the pod after 20 idle minutes or 4 hours (`IDLE_MIN`, `MAX_HOURS`; see
+`scripts/idle_shutdown.sh`). Let other pages in with `CORS_ORIGINS="https://a,https://b"`.
+
 ## Models and licenses
 
 | Model | Use | License |
