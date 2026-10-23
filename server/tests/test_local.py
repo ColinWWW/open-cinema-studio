@@ -39,6 +39,8 @@ class LocalTest(unittest.TestCase):
         origins = [cmd[i + 1] for i, a in enumerate(cmd) if a == "--cors-origin"]
         self.assertIn("https://colinwww.github.io", origins)
         self.assertIn("http://localhost:5173", origins)
+        self.assertNotIn("--host", cmd)  # this machine only, unless asked
+        self.assertEqual(server_command(8189, 8190, ORIGINS, "0.0.0.0")[-2:], ["--host", "0.0.0.0"])
 
 
 if __name__ == "__main__":
