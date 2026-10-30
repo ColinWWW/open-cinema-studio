@@ -53,10 +53,10 @@ All renders are of our own grey layouts, made with the models above on our A40 p
 | `look_{day,night,snow}_plaza_1920_a40.png`, `two_stage_{day,night,snow}_plaza_1920_a40.mp4` | the same three prompts at 1920×1088: look stills from our 1920×1088 plaza depth map, then LTX-2.5 stage 1 + stage 2 (Oct 21) | ✅ ours |
 | `layout_blocks_{orbit,crane_up,truck,dolly_in}.mp4`, `layout_blocks_{orbit,crane_up,truck,dolly_in}_{depth,first}.png`, `look_{harbour,desert,tokyo,warehouse}_blocks_a40.png`, `stage1_{harbour_orbit,desert_crane_up,tokyo_truck,warehouse_dolly_in}_a40.mp4`, `four_moves.mp4`, `docs/media/four_moves.gif` | `scripts/four_moves.py`: our Blocks layout drawn by `make_test_layout.py` with four camera moves, a look still from each layout's depth, the LTX-2.5 renders, and the grid of them (Oct 21) | ✅ ours |
 | `sequence_plaza_4shots_h100.mp4`, `sequence_plaza_4shots_layout.mp4` | Four shots of our plaza layout (dolly in, orbit right, crane up, truck right), rendered the way **Render all shots** does it, with the day prompt: the cut renders and the cut layout clips (H100, Oct 21) | ✅ ours |
-| `look_plaza.jpg`, `look_plaza_960x576.png` | ⏳ **TODO (Colin): source not recorded.** Write down where the photo came from (site, author, licence or "own photo") | ❓ Source and redistribution permission still need confirmation; the repository is public |
+| `look_plaza.jpg`, `look_plaza_960x576.png` | Source not recorded | Colin says the image is fine to share (Oct 29); original source and licence remain unrecorded |
 | `stage1_core_plaza_*`, `gonogo_stage1_plaza_*` | renders that use `look_plaza*` as the first frame | ✅ follows `look_plaza.jpg` |
 | `ref_street*`, `gonogo_stage1_street*` | third-party photos | ✅ removed and git-ignored |
 
 If `look_plaza*` ever has to go: `server/tests/test_e2e.py` and the `server/render.py` usage example use
 `look_plaza_960x576.png`, so point them at `look_gen_plaza_a40.png` first. The repository is public, and a deleted file remains in git history. If removal is needed, coordinate a history rewrite (e.g. `git filter-repo
---path examples/look_plaza.jpg --invert-paths`, for each file) before making it public.
+--path examples/look_plaza.jpg --invert-paths`, for each file) with awareness that the repository is already public.
