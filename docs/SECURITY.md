@@ -140,15 +140,11 @@ Reviewed as an attacker would: `web/src/cloud.js`, how `web/src/render.js` uses 
   `sessionStorage`, cookies, IndexedDB, the URL or the exported files. A test checks what
   `saveCloud` writes.
 
-### Open: needs a file outside this review
+### Fixed after the review
 
-13. **Forget key can silently fail.** **Forget key** clears the field and calls the same save as
-    **Save & check**, which first validates the via URL. If the via field holds something invalid
-    (say `http://relay.example.com`), it shows the error and returns *before* removing the key, so
-    the key stays in `localStorage` and in memory. The fix is one line in `web/src/render.js`'s Forget
-    handler: call `saveCloud({ key: '', base: cloud.base })` and set `cloud.key = ''` before
-    validating. `render.js` is outside this review's files; it fits brief 16, which already edits it.
-    Until then, the browser's "clear site data" always removes the key.
+13. **Forget key could silently fail when the via URL was invalid.** The handler now clears the key
+    from memory and browser storage before validating the edited URL. If browser storage is blocked,
+    clear site data to be certain it has been removed.
 
 ## For visitors
 
