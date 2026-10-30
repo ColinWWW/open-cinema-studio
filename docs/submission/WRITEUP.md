@@ -1,24 +1,21 @@
 # Writeup (for the submission form)
 
 Final text for the [form](https://form.typeform.com/to/V1dSQrkS) and the social posts. Every claim here
-matches the README; if the README changes, change this too. On the night, replace `<NAME>` with the
-picked name ([NAMES.md](NAMES.md)) and fill in `<live link>` and `<video link>`.
+matches the README; if the README changes, change this too. Fill in `<video link>` after uploading the demo.
 
 The field headings below are what we expect the form to ask; paste each answer into the closest field.
 
 ## Project name
 
-<NAME>
+Open Cinema Studio
 
 ## One line
 
-Block a person walking, get a person walking: key grey stand-ins and a camera move in your browser, and
-get back a cinematic clip that follows that exact blocking, move and camera. Open weights only: LTX-2.5 +
-Layout-to-Render, through the Comfy SDK.
+Turn simple 3D blocking into cinematic AI video with precise camera and motion control.
 
 ## Description (about 150 words)
 
-<NAME> is previs that turns into the final shot: block a person walking, get a person walking. In a
+Open Cinema Studio is previs that turns into the final shot: block a person walking, get a person walking. In a
 browser editor you place grey boxes, people and walls, key them to move, and key a camera or pick a
 move (dolly, truck, crane, orbit). The browser exports a playblast and frame 0's depth map.
 Z-Image-Turbo with a depth ControlNet paints a first frame from that depth, so it lines up box for box.
@@ -56,7 +53,7 @@ Open Weights Only, and the bonus VFX Workflow Built with LTX.
 - Every model downloads from Hugging Face and runs locally: LTX-2.5 and the IC-LoRA (LTX-2.x
   community licence) and Z-Image-Turbo with the Fun ControlNet Union (Apache-2.0).
   Full list: [LICENCE_AUDIT.md](LICENCE_AUDIT.md).
-- No partner nodes or paid APIs. `scripts/check_open_weights.py` checks every workflow in CI.
+- The rendering workflows use no partner nodes or closed-model APIs. `scripts/check_open_weights.py` checks every workflow in CI. The optional scene agent separately uses Claude, Gemini or OpenAI with a user-provided key.
 - The app talks to ComfyUI through the official Comfy SDK, on Comfy Cloud or on your own GPU
   (self-hosted ComfyUI behind comfy-api-proxy). We developed and rendered on a rented A40.
 
@@ -71,7 +68,7 @@ Comfy API the SDK speaks (see `docs/LIVE_RENDER.md`).
 
 ## Links
 
-- Live link: <live link> (https://colinwww.github.io/open-cinema-studio/ until a rename). It opens with
+- Live link: https://colinwww.github.io/open-cinema-studio/. It opens with
   a step-by-step replay of a real A40 render of the plaza example (no GPU needed), then the full
   blocking tool. **Share link** copies a URL that opens your scene, and the page shows a preview card
   when the link is posted. Use Chrome or Edge.
@@ -92,16 +89,16 @@ there and drop the "Video:" line.
 
 > Block a person walking, get a person walking. Key grey stand-ins and a camera in your browser;
 > LTX-2.5 + Layout-to-Render films it.
-> <NAME>: open weights only, on the Comfy SDK.
+> Open Cinema Studio: open weights only, on the Comfy SDK.
 >
-> Try it: <live link>
+> Try it: https://colinwww.github.io/open-cinema-studio/
 > Video: <video link>
 >
 > #OpenSourceHiggsfield
 
 ### LinkedIn (about 100 words)
 
-> Directors block shots with stand-ins before they light them. I built <NAME> to do the same with
+> Directors block shots with stand-ins before they light them. I built Open Cinema Studio to do the same with
 > video models.
 >
 > Block a person walking, get a person walking. You place grey boxes and people in a browser editor,
@@ -113,14 +110,14 @@ there and drop the "Video:" line.
 > Open weights only, built on the Comfy SDK, MIT licensed. My entry to Comfy's Open Source Higgsfield
 > challenge.
 >
-> Try it: <live link>
+> Try it: https://colinwww.github.io/open-cinema-studio/
 > Demo: <video link>
 >
 > #OpenSourceHiggsfield #ComfyUI #LTX #previs #VFX
 
 ### Reddit r/comfyui
 
-**Title:** <NAME>: block a person walking with grey stand-ins in the browser, LTX-2.5 Layout-to-Render films a person walking (open weights, Comfy SDK)
+**Title:** Open Cinema Studio: block a person walking with grey stand-ins in the browser, LTX-2.5 Layout-to-Render films a person walking (open weights, Comfy SDK)
 
 > I built a previs tool for the Open Source Higgsfield challenge (#OpenSourceHiggsfield). You block a
 > scene in a three.js editor (grey boxes, people, walls), key stand-ins to move along the shot, key a
@@ -139,4 +136,4 @@ there and drop the "Video:" line.
 > layout, four moves, four places (harbour orbit, desert crane, Tokyo truck, warehouse dolly) is in the
 > README.
 >
-> Live demo: <live link> · Video: <video link> · Repo: https://github.com/ColinWWW/open-cinema-studio
+> Live demo: https://colinwww.github.io/open-cinema-studio/ · Video: <video link> · Repo: https://github.com/ColinWWW/open-cinema-studio
