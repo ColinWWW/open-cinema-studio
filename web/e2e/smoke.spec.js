@@ -104,3 +104,23 @@ test('editor: loading the Plaza preset over the default scene asks in the in-app
 
   expect(native).toEqual([]);
 });
+
+
+test('Forget key clears saved credentials even with an invalid relay URL', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('ocs.replaySeen', '1');
+  });
+  await page.goto('./');
+  await page.evaluate(() => localStorage.setItem('ocs.comfyKey', 'comfyui-test'));
+  await page.reload();
+  await page.locator('#render-open').click();
+  await page.locator('#render-target').selectOption('cloud');
+  await page.locator('#render-cloud-base').fill('http://invalid.example.com');
+  await page.locator('#render-cloud-forget').click();
+  await expect(page.locator('#render-cloud-key')).toHaveValue('');
+  expect(await page.evaluate(() => localStorage.getItem('ocs.comfyKey'))).toBeNull();
+  await page.reload();
+  await page.locator('#render-open').click();
+  await page.locator('#render-target').selectOption('cloud');
+  await expect(page.locator('#render-cloud-key')).toHaveValue('');
+});
