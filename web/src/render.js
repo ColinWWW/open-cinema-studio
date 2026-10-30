@@ -576,6 +576,8 @@ export function initRenderPanel({ getScene, showShot, exportPlayblast, demo, pro
   $('render-cloud-base').addEventListener('change', saveCloudSettings);
   $('render-cloud-forget').addEventListener('click', () => {
     $('render-cloud-key').value = '';
+    cloud = { ...cloud, key: '' };
+    saveCloud(cloud);
     saveCloudSettings();
   });
   ui.target.addEventListener('change', () => setTarget(ui.target.value));
