@@ -57,7 +57,7 @@ Single A40 runs on Oct 21; your times will vary.
 
 ## Try it
 
-**Live:** https://colinwww.github.io/open-cinema-studio/ *(goes live on submission night)*. Use Chrome or Edge.
+**Live:** https://colinwww.github.io/open-cinema-studio/. Use Chrome or Edge.
 
 On a first visit the page replays a real render of the plaza example step by step (**▶ Demo** plays it
 again): the layout, its depth, the look still and the LTX-2.5 render, with the real A40 timings sped up.
