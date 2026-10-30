@@ -5,6 +5,7 @@
     python -m server.local --comfyui-dir D:\\ComfyUI          # a ComfyUI checkout somewhere else
     python -m server.local --comfyui-url http://127.0.0.1:8188   # a ComfyUI you already run
     python -m server.local --mock                            # no GPU: the stand-in ComfyUI, to try the panel
+    python -m server.local --comfyui-url http://127.0.0.1:8188 --host 0.0.0.0   # a pod: scripts/start_pod.sh
 
 It checks the GPU first (server.doctor): under 24 GB of VRAM ComfyUI runs with --lowvram, and under 16 GB a
 video render won't fit (look stills still run). Ctrl+C stops everything it started. Logs go to server/logs/.
@@ -50,11 +51,11 @@ def comfyui_command(comfy_dir, python, port, lowvram):
     return cmd + ["--lowvram"] if lowvram else cmd
 
 
-def server_command(proxy_port, port, origins):
+def server_command(proxy_port, port, origins, host="127.0.0.1"):
     cmd = [sys.executable, "-m", "server.app", "--comfy-url", f"http://127.0.0.1:{proxy_port}", "--port", str(port)]
     for o in origins:
         cmd += ["--cors-origin", o]
-    return cmd
+    return cmd + ["--host", host] if host != "127.0.0.1" else cmd
 
 
 def answers(url, timeout=2):
@@ -153,6 +154,8 @@ def main(argv=None):
     ap.add_argument("--port", type=int, default=8190, help="render server port (the app's This computer uses 8190)")
     ap.add_argument("--cors-origin", action="append", help="pages that may call the server (default: the live "
                     "page and the dev servers on localhost)")
+    ap.add_argument("--host", default="127.0.0.1", help="interface the render server listens on (0.0.0.0 on a pod, "
+                    "so its proxy URL reaches it; ComfyUI and the proxy stay on this machine)")
     args = ap.parse_args(argv)
     # Line by line even into a log file (nohup, a service): otherwise "Ready" sits in Python's buffer.
     sys.stdout.reconfigure(line_buffering=True)
@@ -192,10 +195,14 @@ def main(argv=None):
 
         print("== render server")
         origins = args.cors_origin or ORIGINS
-        srv = stack.start("server", server_command(args.proxy_port, args.port, origins))
+        srv = stack.start("server", server_command(args.proxy_port, args.port, origins, args.host))
         stack.wait_for("server", srv, f"http://127.0.0.1:{args.port}/api/health", 60)
 
-        print(f"\nReady on http://127.0.0.1:{args.port}. In the app: Render... > This computer."
+        pod = os.environ.get("RUNPOD_POD_ID")
+        where = (f"\nReady. In the app: Render... > Render server URL: https://{pod}-{args.port}.proxy.runpod.net"
+                 if pod and args.host != "127.0.0.1"
+                 else f"\nReady on http://127.0.0.1:{args.port}. In the app: Render... > This computer.")
+        print(where
               + ("\n(Stand-in ComfyUI: renders are copies of the playblast.)" if args.mock else "")
               + "\nCtrl+C stops it all.")
         while all(p.poll() is None for _, p, _ in stack.procs):
