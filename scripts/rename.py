@@ -1,11 +1,10 @@
-"""Switch the project name from "Open Cinema Studio" / "Name TBD" to the picked one.
+"""Switch the project name from "Open Cinema Studio" to a new name.
 
     python scripts/rename.py Greycut --dry-run                  # print the diff, write nothing
     python scripts/rename.py Greycut                            # rename the title, page and writeup
     python scripts/rename.py Greycut --slug greycut --dry-run   # + the repo slug in URLs and the Pages base path
 
-Touches the places docs/submission/NAMES.md lists: the README title and "Name TBD" status line, the
-`<NAME>` placeholders in docs/submission/WRITEUP.md, the page <title> and header in web/index.html, and,
+Touches the README title, the project name in docs/submission/WRITEUP.md, the page <title> and header in web/index.html, and,
 with --slug, the live-link and repo URLs, `BASE` in web/playwright.config.js and `BASE_PATH` in
 .github/workflows/pages.yml (that one already follows the repo name, so it is only rewritten if it was
 ever hard-coded). Renaming the GitHub repo itself is a Settings change, done by hand, and so is
@@ -29,9 +28,7 @@ def name_rules(name):
     esc = name.replace("\\", r"\\")
     return [
         ("README.md", rf"\A# {OLD_NAME}$", f"# {esc}"),
-        ("README.md", r" Name TBD\.", ""),
-        # every <NAME> except the one quoted in backticks in the instructions at the top
-        ("docs/submission/WRITEUP.md", r"(?<!`)<NAME>(?!`)", esc),
+        ("docs/submission/WRITEUP.md", re.escape(OLD_NAME), lambda _m: name),
         ("web/index.html", rf"<title>{OLD_NAME}( —|</title>)", rf"<title>{esc}\1"),
         ("web/index.html", rf'(class="brand-name">){OLD_NAME}<', rf"\g<1>{esc}<"),
         # link-preview tags (og:site_name, og:title, twitter:title)
@@ -43,8 +40,7 @@ def name_rules(name):
 def slug_rules(slug):
     pages = rf"colinwww\.github\.io/{OLD_SLUG}/"
     return [
-        # WRITEUP gives the current Pages URL "until a rename": after one it is simply the URL
-        ("docs/submission/WRITEUP.md", rf"\(https://{pages} until a rename\)", f"(https://colinwww.github.io/{slug}/)"),
+        ("docs/submission/WRITEUP.md", pages, f"colinwww.github.io/{slug}/"),
         ("README.md", pages, f"colinwww.github.io/{slug}/"),
         ("web/index.html", pages, f"colinwww.github.io/{slug}/"),  # og:url, og:image, twitter:image
         *[(f, rf"github\.com/{OWNER}/{OLD_SLUG}\b", f"github.com/{OWNER}/{slug}") for f in ("README.md", "docs/submission/WRITEUP.md", "web/index.html")],
