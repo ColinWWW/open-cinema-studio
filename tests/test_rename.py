@@ -40,7 +40,7 @@ def test_name_only(copy):
     assert readme.startswith("# Greycut\n") and "Name TBD" not in readme
     writeup = read(copy, "docs/submission/WRITEUP.md")
     assert "\nGreycut\n" in writeup and "I built Greycut to" in writeup
-    assert writeup.count("<NAME>") == 1  # only the backticked one in the instructions
+    assert "Open Cinema Studio" not in writeup
     html = read(copy, "web/index.html")
     assert "<title>Greycut — Blocking</title>" in html and 'class="brand-name">Greycut<' in html
     assert "Open Cinema Studio" not in html
@@ -53,8 +53,8 @@ def test_with_slug(copy):
     assert rename.main(["Blocking Pass", "--slug", "blocking-pass", "--root", str(copy)]) == 0
     for rel in FILES:
         assert "open-cinema-studio" not in read(copy, rel), rel
-    assert "**Live:** https://colinwww.github.io/blocking-pass/" in read(copy, "README.md")
-    assert "(https://colinwww.github.io/blocking-pass/). It opens" in read(copy, "docs/submission/WRITEUP.md")
+    assert "**Live:** <https://colinwww.github.io/blocking-pass/>" in read(copy, "README.md")
+    assert "https://colinwww.github.io/blocking-pass/. It opens" in read(copy, "docs/submission/WRITEUP.md")
     assert "github.com/ColinWWW/blocking-pass#try-it" in read(copy, "web/index.html")
     assert "const BASE = '/blocking-pass/';" in read(copy, "web/playwright.config.js")
     # pages.yml takes the base path from the repo name, so a repo rename covers it
