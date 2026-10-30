@@ -4,11 +4,11 @@
 
 Block out a shot with grey boxes and a camera path in your browser, give it one art-direction
 frame, and get back a cinematic clip that follows your exact camera move and layout.
-Open-weights only: **LTX-2.5 + the Layout-to-Render IC-LoRA** for the clip and **Z-Image-Turbo + a depth
+The rendering pipeline uses open weights: **LTX-2.5 + the Layout-to-Render IC-LoRA** for the clip and **Z-Image-Turbo + a depth
 ControlNet** for the art-direction frame, running in ComfyUI.
 
 Entry for the [Comfy Open Source Higgsfield Challenge](https://comfy.org/open-source-higgsfield)
-(Open Weights Only + VFX Workflow Built with LTX). Name TBD. Submission checklist and demo shot list:
+(Open Weights Only + VFX Workflow Built with LTX). Submission checklist and demo shot list:
 [docs/submission/](docs/submission/CHECKLIST.md).
 
 <p align="center">
@@ -57,7 +57,7 @@ Single A40 runs on Oct 21; your times will vary.
 
 ## Try it
 
-**Live:** https://colinwww.github.io/open-cinema-studio/ *(goes live on submission night)*. Use Chrome or Edge.
+**Live:** <https://colinwww.github.io/open-cinema-studio/>. Use Chrome or Edge.
 
 On a first visit the page replays a real render of the plaza example step by step (**▶ Demo** plays it
 again): the layout, its depth, the look still and the LTX-2.5 render, with the real A40 timings sped up.
@@ -354,7 +354,7 @@ look still that drifts from the layout gets the layout ignored.
 > commercially, check each model's license and get a commercial license from the model maker where
 > it's required. The MIT license below covers only this repo's code, not the models.
 
-No partner nodes or closed APIs are used. Check any workflow with
+The rendering workflows use no partner nodes or closed-model APIs. The optional scene agent uses Claude, Gemini or OpenAI with your own key. Check any workflow with
 `python scripts/check_open_weights.py workflows/*.json`.
 
 ## License

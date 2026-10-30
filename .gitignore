@@ -34,3 +34,10 @@ web/playwright-report/
 server/logs/
 # ComfyUI checkout made by scripts/setup_local.*
 /ComfyUI/
+
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
